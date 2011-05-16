@@ -1,0 +1,147 @@
+#lang racket
+
+(require utilities/lists)
+
+(define-syntax let-if 
+  (syntax-rules ()
+    [(let-if name pred true false) 
+     (let ((name pred))
+       (if pred true false))]))
+
+(define-syntax (mlet* stx) 
+  (syntax-case stx ()
+    [(mlet* monad ((var exp) ...) body ...)
+     (syntax 
+      (mlet-inner monad ((var exp) ...) (with-monad monad body ...)))]))
+
+(define-syntax (with-monad stx)
+  (syntax-case stx ()
+    [(with-monad monad body ...)
+     (with-syntax ((current-monad_ (datum->syntax (syntax monad) 'current-monad))
+                   (m-bind_ (datum->syntax (syntax monad) 'm-bind))
+                   (>>=_ (datum->syntax (syntax monad) '>>=))
+                   (m-return_ (datum->syntax (syntax monad) 'm-return))
+                   (m-plus_ (datum->syntax (syntax monad) 'm-plus))
+                   (m-zero_ (datum->syntax (syntax monad) 'm-zero)))
+       (syntax (let ((current-monad_ monad)
+                     (m-bind_ (bind-of monad))
+                     (m-return_ (return-of monad))
+                     (m-plus_ (plus-of monad))
+                     (m-zero_ (zero-of monad)))
+                 body ...)))]))
+
+(define-syntax (mlet-inner stx)
+  (syntax-case stx ()
+    [(mlet-inner monad ((var exp)) body ...)
+     (syntax ((bind-of monad) exp (lambda (var) 
+                                    body ...)))]
+    [(mlet-inner monad ((var0 exp0) (var1 exp1) ...) body ...)
+     (syntax ((bind-of monad) exp0 (lambda (var0) 
+                                     (mlet-inner monad ((var1 exp1) ...) body ...))))]))
+
+(define (retrieve key alist) 
+  (let-if r (assoc key alist) (cadr r) r))
+
+(define (>partial f . pargs)
+  (lambda args
+    (apply f (append pargs args))))
+
+(define (partial< f . pargs)
+  (lambda args
+    (apply f (append args pargs))))
+
+(define bind-of (>partial retrieve 'bind))
+(define return-of (>partial retrieve 'return))
+(define zero-of (>partial retrieve 'zero))
+(define plus-of (>partial retrieve 'plus))
+
+;; (define (split-after-liberally lst n)
+;;   (let loop 
+;;       ((n n)
+;;        (lst lst)
+;;        (acc-head (list)))
+;;     (cond ((= n 0)
+;;            (list (reverse acc-head) lst))
+;;           ((empty? lst)
+;;            (list (reverse acc-head) lst))
+;;           (#t (loop (- n 1)
+;;                     (cdr lst)
+;;                     (cons (car lst) acc-head))))))
+
+;; (define (bunch-by lst n)
+;;   (let loop ((lst lst)
+;;              (acc (list)))
+;;     (if (empty? lst) 
+;;         (reverse acc)
+;;         (let* ((parts (split-after-liberally lst n))
+;;                (head (car parts))
+;;                (tail (cadr parts)))
+;;           (loop tail (cons head acc)))))) 
+
+(define (alist-cons key val alist)
+  (let loop
+      ((alist alist)
+       (past (list)))
+    (cond ((empty? alist) (cons (list key val) past))
+          ((eq? (car (car alist)) key)
+           (append (cons (list key val) past) (cdr alist)))
+          (#t (loop (cdr alist) (cons (car alist) past))))))
+
+(define (alist>> maybe-alist . args)
+  (if (not (list? maybe-alist)) (apply alist>> (list) maybe-alist args)
+      (foldl 
+       (lambda (pair alist)
+         (alist-cons (car pair) (cadr pair)
+                     alist))
+       maybe-alist
+       (bunch-by args 2))))
+
+(define (reduce f lst)
+  (foldl f (car lst) (cdr lst)))
+
+(define (fswap2 f)
+  (lambda (a b)
+    (f b a)))
+
+(define m-list (alist>> 'bind 
+                        (lambda (v f)
+                          (reduce (fswap2 append) (map f v)))
+                        'return list
+                        'zero (list)
+                        'plus append))
+
+(define (lift-left f monad)
+  (lambda (v . args)
+    (mlet* monad ((v v))
+           (m-return (apply f v args)))))
+
+(define (lift-nth n f monad)
+  (lambda args
+    (mlet* monad ((a (nth n args)))
+           (m-return (apply f (sub-nth n a args))))))
+
+(define (lift-nth-plus n f monad)
+  (lambda args
+    (with-monad monad
+                (reduce m-plus (reverse (mlet* monad ((a (nth n args)))
+                                               (m-return (apply f (sub-nth n a args)))))))))
+
+(define (lift-n n f monad)
+  (if (= n 0) f
+      (let loop ((i 1)
+                 (lifted (lift-nth 0 f monad))
+                 (left (- n 1)))
+        (if (= left 0) lifted
+            (loop
+             (+ i 1)
+             (lift-nth-plus i lifted monad)
+             (- left 1))))))
+
+
+(provide mlet*
+         m-list
+         lift-n
+         lift-left
+         lift-nth
+         lift-nth-plus)
+

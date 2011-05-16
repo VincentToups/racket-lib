@@ -1,0 +1,26 @@
+#lang racket
+(require utilities/geometry
+         utilities/destructuring)
+
+(define (room! x y w h)
+  (list 'room x y w h)) 
+
+(define (uniform min width)
+  (+ min (random width)))
+
+(define (random-room within max-width max-height)
+  (let-list
+   (x-min y-min x-w y-w) within
+   (let* ((x (uniform x-min x-w))
+          (y (uniform y-min y-w))
+          (w (uniform 3 max-width))
+          (h (uniform 3 max-height))
+          (left (+ x w))
+          (top (+ y h)))
+     (if (or (> left (+ x-min x-w))
+             (> top (+ y-min y-w)))
+         (random-room within max-width max-height)
+         (room! x y w h)))))
+
+(define (random-room-avoiding 
+         within max-width max-height room-list)

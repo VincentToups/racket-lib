@@ -1,0 +1,48 @@
+#lang racket
+
+(require utilities/lists
+         functional/point-free)
+
+(define (one-of-f-ranges weights)
+  (let* ((total (exact->inexact (reduce + weights)))
+         (normed (map (partial< / total) weights))
+         (ceilings (cum-sum normed)))
+    (list-zip (cons 0 (drop-last ceilings)) ceilings)))
+         
+
+(define (one-of-f . args)
+  (let* ((weights (map car args))
+         (expressions
+          (map cadr args))
+         (ranges (one-of-f-ranges weights))
+         (draw (random)))
+    (let loop ((remaining-ranges ranges)
+               (expressions expressions))
+      (let ((range (car remaining-ranges))
+            (rest (cdr remaining-ranges)))
+        (if (and
+             (>= draw (car range))
+             (<  draw (cadr range)))
+            ((car expressions))
+            (loop rest (cdr expressions)))))))
+         
+    
+(define-syntax (one-of-helper stx)
+  (syntax-case stx ()
+    [(one-of-helper (weight expr ...))
+     (syntax (list (list weight (lambda () expr ...))))]
+    [(one-of-helper (w0 e0 ...) (w e ...) ...)
+     (syntax (cons (list w0 (lambda () e0 ...)) (one-of-helper (w e ...) ...)))]))
+
+(define-syntax (one-of stx)
+  (syntax-case stx ()
+    [(one-of (weight expr ...))
+     (syntax (apply one-of-f (list (list weight (lambda () expr ...)))))]
+    [(one-of (weight0 expr0 ...) (weight expr ...) ...)
+     (syntax (apply one-of-f (cons (list weight0 (lambda () expr0 ...)) (one-of-helper (weight expr ...) ...))))]))
+                           
+(provide one-of)
+
+
+
+    

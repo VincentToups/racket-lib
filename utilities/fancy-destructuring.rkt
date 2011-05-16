@@ -1,0 +1,215 @@
+#lang racket
+(require racket/dict)
+
+(define (sloppy-car o)
+  (if (< (length o) 1) 'unbound
+      (car o)))
+
+(define (sloppy-cdr o)
+  (if (< (length o) 1) '()
+      (cdr o)))
+
+(define (sloppy-car-or o or)
+  (if (< (length o) 1) (sloppy-car or)
+      (let ((r (sloppy-car o)))
+        (if (eq? r 'unbound) (sloppy-car or) r))))
+
+(define (sloppy-cdr-or o or)
+  (if (< (length o) 1) (sloppy-cdr or)
+      (cdr o)))
+
+(define (dict-ref-or o key or)
+  (let ((r (dict-ref o key 'unbound)))
+    (if (eq? r 'unbound) (dict-ref or key 'unbound)
+        r)))
+
+(define-syntax (dlet1 stx)
+  (syntax-case stx (: :> as or &)
+    [(dlet1 () expr body ...)
+     (syntax (begin body ...))]
+    [(dlet1 (: & var) expr body ...)
+     (syntax (let ((var expr)) body ...))]
+    [(dlet1 (: x ) expr body ...)
+     (syntax (dlet1 x (sloppy-car expr) body ...))]
+    [(dlet1 (: var0 var ...) list-expr body ...)
+     (syntax 
+      (let* ((v list-expr)
+             (hd (sloppy-car v))
+             (tl (sloppy-cdr v)))
+        (dlet1 var0 hd 
+               (dlet1 (: var ...) tl body ...))))]
+    
+    [(dlet1 ((:) & var) expr body ...)
+     (syntax (let ((var expr)) body ...))]
+    [(dlet1 ((:) x ) expr body ...)
+     (syntax (dlet1 x (sloppy-car expr) body ...))]
+    [(dlet1 ((:) var0 var ...) list-expr body ...)
+     (syntax 
+      (let* ((v list-expr)
+             (hd (sloppy-car v))
+             (tl (sloppy-cdr v)))
+        (dlet1 var0 hd 
+               (dlet1 (: var ...) tl body ...))))]
+
+        [(dlet1 ((: or or-expr) & var) expr body ...)
+         (syntax (let ((var expr)) body ...))]
+
+    [(dlet1 ((: or or-expr)) expr body ...)
+     (syntax (begin body ...))]
+    
+    [(dlet1 ((: or or-expr) x ) expr body ...)
+     (syntax (dlet1 x (sloppy-car-or expr or-expr) body ...))]
+    [(dlet1 ((: or or-expr) var0 var ...) list-expr body ...)
+     (syntax 
+      (let* ((v list-expr)
+             (o or-expr)
+             (or-tl (sloppy-cdr o))
+             (hd (sloppy-car-or v o))
+             (tl (sloppy-cdr-or v o)))
+        (dlet1 var0 hd 
+               (dlet1 ((: or or-tl) var ...) tl body ...))))]
+
+    [(dlet1 ((: as name)) list-expr body ...)
+     (syntax 
+      (let* ((name list-expr))
+        body ...))]
+    
+    [(dlet1 ((: as name) var) list-expr body ...)
+     (syntax 
+      (let* ((name list-expr)
+             (hd (sloppy-car name))
+             (tl (sloppy-cdr name)))
+        (dlet1 var hd 
+               body ...)))]
+    
+    
+    [(dlet1 ((: as name) var0 var ...) list-expr body ...)
+     (syntax 
+      (let* ((name list-expr)
+             (hd (sloppy-car name))
+             (tl (sloppy-cdr name)))
+        (dlet1 var0 hd 
+               (dlet1 (: var ...) tl body ...))))]
+
+    [(dlet1 ((: as name or or-expr)) list-expr body ...)
+     (syntax 
+      (let* ((name list-expr))
+        (dlet1 ((: or or-expr)) name body ...)))]
+    
+    
+    [(dlet1 ((: as name or or-expr) var ...) list-expr body ...)
+     (syntax 
+      (let* ((name list-expr))
+        (dlet1 ((: or or-expr) var ...) name body ...)))]
+
+    [(dlet1 ((: or or-expr as name)) list-expr body ...)
+     (syntax 
+      (dlet1 ((: as name or or-expr)) list-expr body ...))]
+    
+    [(dlet1 ((: or or-expr as name) var ...) list-expr body ...)
+     (syntax 
+      (dlet1 ((: as name or or-expr) var ...) list-expr body ...))]
+
+    [(dlet1 (:> name key) table-expr body ...)
+     (syntax (dlet1 name (dict-ref table-expr key 'unbound) body ...))]
+    [(dlet1 (:> name0 key0 subsequent ...) table-expr body ...)
+     (syntax 
+      (let* ((tbl table-expr))
+        (dlet1 name0 (dict-ref tbl key0 'unbound)
+               (dlet1 (:> subsequent ...) tbl body ...))))]
+    
+    [(dlet1 ((:>) name key) table-expr body ...)
+     (syntax (dlet1 name (dict-ref table-expr key 'unbound) body ...))]
+    [(dlet1 ((:>) name0 key0 subsequent ...) table-expr body ...)
+     (syntax 
+      (let* ((tbl table-expr))
+        (dlet1 name0 (dict-ref tbl key0 'unbound)
+               (dlet1 (:> subsequent ...) tbl body ...))))]
+
+    [(dlet1 ((:> or or-expr)) expr body ...)
+     (syntax (begin body ...))]
+    [(dlet1 ((:> or or-expr) name key) table-expr body ...)
+     (syntax (dlet1 name (dict-ref-or table-expr key or-expr) body ...))]
+    [(dlet1 ((:> or or-expr) name0 key0 subsequent ...) table-expr body ...)
+     (syntax 
+      (let* ((tbl table-expr)
+             (orv or-expr))
+        (dlet1 name0 (dict-ref-or tbl key0 orv)
+               (dlet1 ((:> or orv) subsequent ...) tbl body ...))))]
+
+    [(dlet1 ((:> as as-name)) table-expr body ...)
+     (syntax 
+      (let* ((as-name table-expr))
+        (begin body ...)))]
+
+    [(dlet1 ((:> as as-name) name0 key0) table-expr body ...)
+     (syntax 
+      (let* ((as-name table-expr))
+        (dlet1 name0 (dict-ref as-name key0 'unbound)
+               (dlet1 (:> name0 key0) as-name body ...))))]
+
+    [(dlet1 ((:> as as-name) name0 key0 subsequent ...) table-expr body ...)
+     (syntax 
+      (let* ((as-name table-expr))
+        (dlet1 name0 (dict-ref as-name key0 'unbound)
+               (dlet1 (:> subsequent ...) as-name body ...))))]
+
+    [(dlet1 ((:> as as-name or or-val)) table-expr body ...)
+     (syntax 
+      (let* ((as-name table-expr))
+        (begin body ...)))]
+    [(dlet1 ((:> as as-name or or-val) name0 key0) table-expr body ...)
+     (syntax 
+      (let* ((as-name table-expr))
+        (dlet1 ((:> or or-val) name0 key0) as-name body ...)))]
+    [(dlet1 ((:> as as-name or or-val) name0 key0 subsequent ...) table-expr body ...)
+     (syntax 
+      (let* ((as-name table-expr))
+        (dlet1 ((:> or or-val) name0 key0 subsequent ...) as-name body ...)))]
+    [(dlet1 ((:> or or-val as as-name)) table-expr body ...)
+     (syntax
+      (dlet1 ((:> as as-name or or-val)) table-expr body ...))]
+    [(dlet1 ((:> or or-val as as-name) thing ...) table-expr body ...)
+     (syntax
+      (dlet1 ((:> as as-name or or-val) thing ...) table-expr body ...))]
+
+    
+    
+    [(dlet1 x expr body ...)
+     (syntax (let ((x expr)) body ...))]
+    ))
+
+(define-syntax (elet stx)
+  (syntax-case stx ()
+    [(elet () body ...)
+     (syntax (begin body ...))]
+    [(elet (dstr expr) body ...)
+     (syntax (dlet1 dste expr body ...))]
+    [(elet (dstr0 expr0 rest ...) body ...)
+     (syntax (dlet1 dstr0 expr0 
+                    (elet (rest ...) body ...)))]))
+
+(define-syntax (dlet* stx)
+  (syntax-case stx ()
+    [(dlet* () body ...)
+     (syntax (begin body ...))]
+    [(dlet* ((dstr expr)) body ...)
+     (syntax 
+      (dlet1 dstr expr body ...))]
+    [(dlet* ((dstr expr) (dstr1 expr1) ...) body ...)
+     (syntax (dlet1 dstr expr 
+                    (dlet* ((dstr1 expr2) ...) body ...)))]))
+
+(define-syntax (defn stx)
+  (syntax-case stx ()
+    [(defn (name arg ...) body ...)
+     (syntax (define (name . rest)
+               (dlet1 (: arg ...) rest body ...)))]))
+
+(define-syntax (fn stx)
+  (syntax-case stx ()
+    [(fn (arg ...) body ...)
+     (syntax (lambda rest 
+               (dlet1 (: arg ...) rest body ...)))]))
+
+(provide dlet1 dlet* elet defn fn)

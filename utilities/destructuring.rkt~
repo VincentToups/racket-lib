@@ -1,0 +1,14 @@
+#lang racket 
+
+(define-syntax (let-list stx)
+  (syntax-case stx ()
+    [(let-list (symbol) lst body ...)
+     (syntax (let* ((v lst)
+                   (symbol (car v)))
+               body ...))]
+    [(let-list (symbol0 symbol ...) lst body ...)
+     (syntax (let* ((v lst)
+                   (symbol0 (car v)))
+               (let-list (symbol ...) (cdr v) body ...)))]))
+
+(provide let-list)

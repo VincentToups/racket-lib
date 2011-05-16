@@ -1,0 +1,54 @@
+#lang racket
+
+(define (nth n lst)
+  (cond
+   ((empty? lst) #f)
+   ((= n 0)
+    (car lst))
+   (else
+    (nth (- n 1) (cdr lst)))))
+
+(define (sub-nth n val lst)
+  (let loop ((n n)
+             (lst lst)
+             (past '()))
+    (cond
+     ((empty? lst) (reverse past))
+     ((= n 0) (append (reverse past) (cons val (cdr lst))))
+     (else
+      (loop (- n 1) (cdr lst) (cons (car lst) past))))))
+
+(define (trans-nth n f lst)
+  (let loop ((n n)
+             (lst lst)
+             (past '()))
+    (cond
+     ((empty? lst) (reverse past))
+     ((= n 0) (append (reverse past) (cons (f (car lst)) (cdr lst))))
+     (else
+      (loop (- n 1) (cdr lst) (cons (car lst) past))))))
+
+(define (split-after-liberally lst n)
+  (let loop 
+      ((n n)
+       (lst lst)
+       (acc-head (list)))
+    (cond ((= n 0)
+           (list (reverse acc-head) lst))
+          ((empty? lst)
+           (list (reverse acc-head) lst))
+          (#t (loop (- n 1)
+                    (cdr lst)
+                    (cons (car lst) acc-head))))))
+
+(define (bunch-by lst n)
+  (let loop ((lst lst)
+             (acc (list)))
+    (if (empty? lst) 
+        (reverse acc)
+        (let* ((parts (split-after-liberally lst n))
+               (head (car parts))
+               (tail (cadr parts)))
+          (loop tail (cons head acc)))))) 
+
+(provide nth sub-nth split-after-liberally bunch-by trans-nth)

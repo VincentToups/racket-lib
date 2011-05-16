@@ -1,0 +1,37 @@
+#lang racket
+
+(define (>partial f . pargs)
+  (lambda args
+    (apply f (append pargs args))))
+
+(define (partial< f . pargs)
+  (lambda args
+    (apply f (append args pargs))))
+
+(define (dec-all f with)
+  (lambda args
+    (apply f (map with args))))
+
+(define (comp2 f g)
+  (lambda args (f (apply g args))))
+
+(define (compose . fs)
+  (let ((fs (reverse fs)))
+    (foldl
+     (lambda (f o)
+       (comp2 f o))
+     (car fs)
+     (cdr fs))))
+
+(define (f-join f1 f2 j)
+  (lambda args
+    (j (f1 args) (f2 args))))
+
+(define (f-and f1 f2)
+  (lambda args
+    (and (f1 args) (f2 args))))
+
+(define (f-or f1 f2)
+  (lambda args
+    (or (f1 args) (f2 args))))
+
