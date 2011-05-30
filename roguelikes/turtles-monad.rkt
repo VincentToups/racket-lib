@@ -376,25 +376,49 @@
   (m-return #t)))
 
 (dont-do
-(circle-r (car (dict-ref (doublet-b ((mlet*
-  m-turtles
-  ((_ (jump-to 150 150))
-   (_ (split-setl 'move*-fun (list add-line-pts add-circle-pts)))
-   (_ (n-times (mlet* m-turtles
-                      ((p (jitter-by 1 4))
-                       (h (split-setl 'helicity '(-1 1)))
-                       (r (turn (/ pi 4)))
-                       (ln (move* 20))
-                       (r (turn (- (/ pi 8))))
-                       (ln (move* 15)))
-                      (m-return ln)) 2)))
-  (m-return #t)) init-state)) 'draw-these)))
 
+ (turtles-go
+  (mlet* m-turtles
+         ((_ (jump-to 150 150))
+          (len (setl 'len 1))
+          (_ (n-times
+              (mlet* m-turtles
+                     ((len (getl 'len))
+                      (p (move* len))
+                      (r (turn (/ pi 2)))
+                      (len (setl 'len (+ len 1))))
+                     (m-return p))
+              100)))
+         (m-return _)))
+ 
+ (turtles-go
+  (mlet* m-turtles
+         ((_ (jump-to 150 150))
+          (len (setl 'len 2))
+          (_ (n-times
+              (mlet* m-turtles
+                     ((len (getl 'len))
+                      (p (move* len))
+                      (r (turn (/ pi 1.99)))
+                      (len (setl 'len (+ len 2))))
+                     (m-return p))
+              200)))
+         (m-return _)))
+               
+               
+ 
 (turtles-go
  (mlet* m-turtles
-        ((p (jump-to 150 150))
-         (p2 (n-gon 6 30)))
-        (m-return p2)))
+        ((p (split-setl
+             'pos
+             (list (point 150 150)
+                   (point 200 150)
+                   (point 150 200)
+                   (point 200 200))))
+         (h (split-setl
+             'helicity '(-1 1)))
+          (p2 (n-gon 6 30)))
+         (m-return p2)))
 
 (turtles-go
  (mlet* m-turtles
@@ -404,22 +428,21 @@
                    (point 200 150)
                    (point 150 200)
                    (point 200 200))))
-             (p2 (n-gon 6 30)))
-            (m-return p2)))
+         (h (split-setl
+             'helicity '(-1 1)))
+          (p2 (n-gon 6 30)))
+         (m-return p2)))
+
+(turtles-go
+ (mlet* m-turtles
+        ((p (split-setl
+             'pos
+             (list (point 150 150)
+                   )))
+         (n (split-setl
+             'n '(3 5 7 9 11 13)))
+          (p2 (n-gon n 30)))
+         (m-return p2)))
 
 
-((move 20) init-state)
-
-((mlet* m-turtles
-        ((_ (mlet* m-turtles
-                   ((_ (split-setl 'x '(1 2 3)))
-             (x (getl 'x)))
-            (m-return x)))
-  (x (getl 'x)))
- (m-return x)) init-state)
-
-
-((mlet* m-turtles
-       ((f (getl-or 'f 
-       (m-return f)) init-state)
-        ))))
+)

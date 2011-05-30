@@ -8,6 +8,9 @@ those dynamic languages which most folks are familiar with there are
 already facilities for dealing with Errors or Exceptions and so these
 monads seem like trinkets.  Why bother?
 
+![Spirals](https://s3.amazonaws.com/VincentToupsScreencasts/monad-turtles-polygon-figure-5.png)
+(Keep reading, I promise we will make pretty pictures.)
+
 This seems to lead to the commonly expressed opinion that monads
 aren't really useful in anything but Haskell, and that unless you live
 there, there isn't any point in understanding them.  I can see this
@@ -62,7 +65,26 @@ You can tell the turtle to move forward or to rotate in place or to
 lift up or place the "pen" it carries in its little forelimb.  When
 the pen is down, the turtle leaves a line on the screen.
 
-![Spirals](http://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Turtle-Graphics_Polyspiral.svg/600px-Turtle-Graphics_Polyspiral.svg.png)
+That first figure up there, for instance, was produced using the
+library we'll build today.  The following code does it:
+
+    (turtles-go
+      (mlet* m-turtles
+             ((new-pos (jump-to 150 150))
+              (len     (setl 'len 2))
+              (new-pos (n-times
+                        (mlet* m-turtles
+                          ((len (getl 'len))
+                           (p   (move* len))
+                           (r   (turn (/ pi 1.99)))
+                           (len (setl 'len (+ len 2))))
+                          (m-return p))
+                        200)))
+             (m-return new-pos)))
+
+Here is the result again, since its not on the screen anymore:
+
+![Spirals](https://s3.amazonaws.com/VincentToupsScreencasts/monad-turtles-polygon-figure-5.png)
 
 You can imagine that with such a system, one can very quickly convince
 the turtle to draw all sorts of spirographical images, telling the
@@ -103,16 +125,20 @@ An even simpler approach might be to tell the turtle to have two
 different "helicities," that is, one turtle interprets `(turn 45)` as
 meaning to turn clockwise, and the other interprets it to mean
 counter-clockwise.  Now any sequence of drawing commands will produce
-a symmetric figure, all for free.  My monad sense started tingling!
+a symmetric figure, all for free.  State dependent computations with
+multiple possible outcomes?  
+
+Is anyone else's monad sense tingling!?
 
 Monads in Scheme (a diversion)
 ------------------------------
 
-If you've read any of my other posts about monads, you know how this
-is going to go.  We are going to define a macro to facilitate monadic
-computation.  Since this is a kind of advanced article, I'm going to
-asssume you have the basic idea about `bind` and `return` more or less
-down.  If I say that:
+If you've read any of my [other posts about
+monads][previous-monad-tutorial], you know how this is going to go.
+We are going to define a macro to facilitate monadic computation.
+Since this is a kind of advanced article, I'm going to asssume you
+have the basic idea about `bind` and `return` more or less down.  If I
+say that:
 
     (mlet* sequence-monad
       ((x '(1 2 3))
@@ -830,24 +856,127 @@ the result?
 
 ![polyfig2](https://s3.amazonaws.com/VincentToupsScreencasts/monad-turtles-polygon-figure-2.png)
 
- 
+We can do some pretty neat things in short order by changing the way
+motion commands are interpreted by the turtle.  Remember the helicity
+option?  Helicity changes the way individual turtles interpret turn
+commands:
+
+    (turtles-go
+     (mlet* m-turtles
+            ((p (split-setl
+                 'pos
+                 (list (point 150 150)
+                       (point 200 150)
+                       (point 150 200)
+                       (point 200 200))))
+             (h (split-setl
+                 'helicity '(-1 1)))
+              (p2 (n-gon 6 30)))
+             (m-return p2)))
+
+Results in:
+
+![p3](https://s3.amazonaws.com/VincentToupsScreencasts/monad-turtles-polygon-figure-3.png)
+
+We can do tons of things by modifying helicity, but lets do one more
+different trick:
+
+    (turtles-go
+     (mlet* m-turtles
+            ((p (jump-to 150 150))
+             (n (split-setl
+                 'n '(3 5 7 9 11 13)))
+              (p2 (n-gon n 30)))
+             (m-return p2)))
+
+Results in:
+
+![p4](https://s3.amazonaws.com/VincentToupsScreencasts/monad-turtles-polygon-figure-4.png)
+
+Eee gads!  We've drawn the first six prime n-gons all at once!  I
+leave you to consider what could be done with the following
+combinator:
+
+    (define (move* amt)
+      (mlet* m-turtles 
+             ((jitter-mag (getl-or 'jitter-mag 0))
+              (non-monadically:
+               ((amt (+ amt (random-normal 0 jitter-mag)))))
+              (pos (getl-or 'pos (point 0 0)))
+              (_ (move amt))
+              (pos2 (getl 'pos))
+              (f (getl-or 'move*-fun (lambda () add-line-pts)))
+              (_ (f pos pos2)))
+             (m-return pos2)))
 
 
+Musings on Monads
+-----------------
 
+Besides drawing pretty pictures, what are we trying to accomplish
+here?  Well, if you go sniffing around the internet about monads,
+you'll often hear that monads "don't work" programming languages
+besides Haskell.  Reasons proferred include "it is easier to use
+side-effects," "there isn't syntactic support," and "you need static
+typing."  I'm not a Haskell programmer, so I can't speak too
+authoritatively on the subject static typing, but I think that at
+least in Lisp dialects where the second argument can be easily
+dispensed with, the first argument doesn't hold water.
 
+If you look up the Forth pages on the C2 Wiki you'll eventually come
+across the programmer's meme: [Do the Simplest Thing That Could
+Possibly Work][c2-simple].  This means what it says: when you've got a
+problem, don't worry about picking an optimal solution, just do the
+simplest thing that could possibly work.  
 
+In my mind, this was the simplest implementation of a hyperturtle
+graphics system. 
 
+Now, I know that is going to seem pretty crazy to a person just trying
+to wrap their heads around monads.  Surely, you'll object, this can't
+be the simplest possible implementation!  To that, I'd say go back and
+look at the implementation of `return` and `bind` which together add
+up to 21 or so lines of code.  If we had the right monad transformers
+at our disposal, we could write the same monad in one line of code!
+Assuming we had a handle on each of the monads in question, what we'd
+have accomplished is the creation of a sub-langage with entirely novel
+semantics in a few tokens.  Add the `mlet*` syntax (itself about 20
+lines of syntax-case macro) and the minimal subset of `turtle`
+primitive functions, and we are suddenly looking at a
+domain-specific-langage _on steroids_.  
 
+But this is a very simple solution!  You write a short bind and return
+function, use the already "standard" monadic syntax, and inside those
+expressions, you've got a whole new programming language.  Because
+everything is purely functional, up to this point you've made _no hard
+design decisions_.  You haven't declared any global variables, thought
+about how to represent the persistent state of anything.  The monad
+provides a clean bed to write code in - and you don't need much code
+to get somewhere interesting.
 
+Performance might be a problem - but I'd suggest that as a prototype
+system the monad provides excellent semantics for any more efficient
+implementation to target.  This is enhanced because of the very
+compactness of the implementation!  You know what your system does
+when you design it this way, because all the important behavior is
+specified in one place.
 
+Secondly, I hope the article has provided an example of the process by
+which monads are constructed and used that isn't particularly
+artificial.  Most monad tutorials provide ad-hoc examples which don't
+do anything interesting, and use pre-fab monads.  I hope this
+development of a free-form monad for a novel problem is interesting.  
 
+And that is about it!
 
-
-
-
-      
+As always, the code for this project is hosted on [my
+github][github-racket].  Comments, critiques, corrections are
+extremely welcome!
 
 
 * * *
 
 [turtle-wikipedia]: http://en.wikipedia.org/wiki/Turtle_graphics
+[c2-simple]: http://c2.com/xp/DoTheSimplestThingThatCouldPossiblyWork.html
+[previous-monad-tutorial]: http://dorophone.blogspot.com/2011/04/deep-emacs-part-1.html
+[github-racket]: 
