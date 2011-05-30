@@ -172,8 +172,6 @@
     [(dlet1 ((:> or or-val as as-name) thing ...) table-expr body ...)
      (syntax
       (dlet1 ((:> as as-name or or-val) thing ...) table-expr body ...))]
-
-    
     
     [(dlet1 x expr body ...)
      (syntax (let ((x expr)) body ...))]
@@ -198,7 +196,7 @@
       (dlet1 dstr expr body ...))]
     [(dlet* ((dstr expr) (dstr1 expr1) ...) body ...)
      (syntax (dlet1 dstr expr 
-                    (dlet* ((dstr1 expr2) ...) body ...)))]))
+                    (dlet* ((dstr1 expr1) ...) body ...)))]))
 
 (define-syntax (defn stx)
   (syntax-case stx ()

@@ -1,0 +1,39 @@
+#lang racket
+
+(require racket/match)
+
+(struct point (x y)
+  #:constructor-name point!)
+(struct room (x y w h)
+  #:constructor-name room!)
+(struct hall-segment (p1 p2)
+  #:constructor-name hall-segment!)
+
+(struct dungeon-turtle-state 
+  (x y features))
+
+(match-let ([(room x y w h) (room! 0 0 0 0)]) (list x y w h))
+
+(define (point-in-room? a-room a-point)
+  (match-let ([(room x y w h) a-room]
+              [(point px py) a-point])
+    (and (> px x)
+                  (> py y)
+                  (< px (+ x w))
+                  (< py (+ y w)))))
+    
+    
+
+
+;(define in-room? 
+;  (match-lambda (dungeon-turtle-state pos features)
+;                (let loop ((features features))
+;                  (match features 
+;                    ['() #f]
+;                    [(list feature subsequent) 
+;                     (match feature
+;                       [(room _)
+;                        (if (point-in-room? room pos) #t
+;                            (loop subsequent))]
+;                       [_ (loop subsequent)])]))))
+;  

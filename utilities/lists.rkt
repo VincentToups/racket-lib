@@ -74,12 +74,7 @@
   (any-by lst identity))
 
 (define (none-by lst pred)
-  (if (foldl 
-       (lambda (it ac)
-         (and ac (not (pred it))))
-       (not (car lst))
-       (cdr lst)) #t #f))
-
+  (not (any-by lst pred)))
 (define (none lst)
   (none-by lst identity))
 

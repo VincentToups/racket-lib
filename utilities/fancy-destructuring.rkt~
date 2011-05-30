@@ -23,12 +23,12 @@
     (if (eq? r 'unbound) (dict-ref or key 'unbound)
         r)))
 
-
 (define-syntax (dlet1 stx)
   (syntax-case stx (: :> as or &)
     [(dlet1 () expr body ...)
      (syntax (begin body ...))]
-    
+    [(dlet1 (: & var) expr body ...)
+     (syntax (let ((var expr)) body ...))]
     [(dlet1 (: x ) expr body ...)
      (syntax (dlet1 x (sloppy-car expr) body ...))]
     [(dlet1 (: var0 var ...) list-expr body ...)
@@ -38,8 +38,6 @@
              (tl (sloppy-cdr v)))
         (dlet1 var0 hd 
                (dlet1 (: var ...) tl body ...))))]
-    [(dlet1 (: & var) expr body ...)
-     (syntax (let ((var expr)) body ...))]
     
     [(dlet1 ((:) & var) expr body ...)
      (syntax (let ((var expr)) body ...))]
@@ -174,11 +172,42 @@
     [(dlet1 ((:> or or-val as as-name) thing ...) table-expr body ...)
      (syntax
       (dlet1 ((:> as as-name or or-val) thing ...) table-expr body ...))]
-
-    
     
     [(dlet1 x expr body ...)
      (syntax (let ((x expr)) body ...))]
-    
-    
     ))
+
+(define-syntax (elet stx)
+  (syntax-case stx ()
+    [(elet () body ...)
+     (syntax (begin body ...))]
+    [(elet (dstr expr) body ...)
+     (syntax (dlet1 dste expr body ...))]
+    [(elet (dstr0 expr0 rest ...) body ...)
+     (syntax (dlet1 dstr0 expr0 
+                    (elet (rest ...) body ...)))]))
+
+(define-syntax (dlet* stx)
+  (syntax-case stx ()
+    [(dlet* () body ...)
+     (syntax (begin body ...))]
+    [(dlet* ((dstr expr)) body ...)
+     (syntax 
+      (dlet1 dstr expr body ...))]
+    [(dlet* ((dstr expr) (dstr1 expr1) ...) body ...)
+     (syntax (dlet1 dstr expr 
+                    (dlet* ((dstr1 expr2) ...) body ...)))]))
+
+(define-syntax (defn stx)
+  (syntax-case stx ()
+    [(defn (name arg ...) body ...)
+     (syntax (define (name . rest)
+               (dlet1 (: arg ...) rest body ...)))]))
+
+(define-syntax (fn stx)
+  (syntax-case stx ()
+    [(fn (arg ...) body ...)
+     (syntax (lambda rest 
+               (dlet1 (: arg ...) rest body ...)))]))
+
+(provide dlet1 dlet* elet defn fn)

@@ -4,7 +4,6 @@
          (for-syntax utilities/lists)
          racket/dict)
 
-
 (define-syntax let-if 
   (syntax-rules ()
     [(let-if name pred true false) 
@@ -15,7 +14,7 @@
   (syntax-case stx ()
     [(mlet* monad ((var exp) ...) body ...)
      (syntax 
-      (mlet-inner monad ((var exp) ...) (with-monad monad body ...)))]))
+      (with-monad monad (mlet-inner monad ((var exp) ...) body ...)))]))
 
 (define-syntax (with-monad stx)
   (syntax-case stx ()
@@ -34,13 +33,20 @@
                  body ...)))]))
 
 (define-syntax (mlet-inner stx)
-  (syntax-case stx ()
+  (syntax-case stx (non-monadically:)
+    [(mlet-inner monad ((non-monadically: pairs)) body ...)
+     (syntax (let* pairs body ...))]
     [(mlet-inner monad ((var exp)) body ...)
      (syntax ((bind-of monad) exp (lambda (var) 
                                     body ...)))]
+    [(mlet-inner monad ((non-monadically: pairs) (var1 exp1) ...) body ...)
+     (syntax 
+      (let* pairs (mlet-inner monad ((var1 exp1) ...) body ...)))]
     [(mlet-inner monad ((var0 exp0) (var1 exp1) ...) body ...)
-     (syntax ((bind-of monad) exp0 (lambda (var0) 
-                                     (mlet-inner monad ((var1 exp1) ...) body ...))))]))
+     (syntax ((bind-of monad) 
+              exp0 
+              (lambda (var0) 
+                (mlet-inner monad ((var1 exp1) ...) body ...))))]))
 
 (define (retrieve key alist) 
   (dict-ref alist key))
@@ -182,23 +188,137 @@
    'bind (lambda (v f)
            (lambda (state)
              (let* ((val/state (v state))
-                    (val (car state))
-                    (new-state (cadr state))
+                    (val (car val/state))
+                    (new-state (cadr val/state))
                     (new-f (f val)))
                (new-f new-state))))
    'plus (lambda (sf1 sf2)
            (lambda (state)
              (let ((val/state (sf2 state)))
-               (sf2 (cadr state)))))
+               (sf2 (cadr val/state)))))
    'zero 'unbound))
-                   
- 
-                    
+
+(define-syntax (define-struct-adjuster stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (with-syntax ((name (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol (string-append
+                                           "adjust-" 
+                                           (symbol->string (syntax->datum (syntax struct-id)))
+                                           "-"
+                                           (symbol->string (syntax->datum (syntax field-id)))))))
+                   (monadic-name 
+                    (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol (string-append
+                                           "adjust-" 
+                                           (symbol->string (syntax->datum (syntax struct-id)))
+                                           "-"
+                                           (symbol->string (syntax->datum (syntax field-id))) "^")))))
+       (syntax (begin 
+                 (define (name struct val) 
+                   (struct-copy struct-id struct [field-id val]))
+                 (define (monadic-name val)
+                   (lambda (state)
+                     (list val (name state val)))))))]))
+
+(define-syntax (define-struct-adjusters stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (syntax (define-struct-adjuster struct-id field-id))]
+    [(_ struct-id field-id0 field-id ...)
+     (syntax (begin (define-struct-adjuster struct-id field-id0) 
+                    (define-struct-adjusters struct-id field-id ...)))]))
+
+(define-syntax (define-struct-getter stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (with-syntax ((name (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol
+                           (string-append
+                            (symbol->string (syntax->datum (syntax struct-id)))
+                            "-"
+                            (symbol->string (syntax->datum (syntax field-id)))
+                            ))))
+                   (-name (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol
+                           (string-append
+                            (symbol->string (syntax->datum (syntax struct-id)))
+                            "-"
+                            (symbol->string (syntax->datum (syntax field-id)))
+                            "^")))))
+       (syntax (define (-name state)
+                 (list (name state) state))))]))
+
+(define-syntax (define-struct-getters stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (syntax (define-struct-getter struct-id field-id))]
+    [(_ struct-id field-id0 field-id ...)
+     (syntax (begin (define-struct-getter struct-id field-id0)
+                    (define-struct-getters struct-id field-id ...)))]))
+
+(define-syntax (simple-state-struct stx)
+  (syntax-case stx ()
+    [(_ struct-id field ...)
+     (syntax 
+      (begin (struct struct-id (field ...))
+             (define-struct-getters struct-id field ...)
+             (define-struct-adjusters struct-id field ...)))]))
+
+(define (push x)
+  (lambda (state)
+    (list x (cons x state))))
+
+(define pop
+  (lambda (state)
+    (list (car state) (cdr state))))
+
+
+
+(define stack+
+  (mlet* m-state
+         ((a pop)
+          (b pop))
+         (m-return (+ a b))))
+
+(define (m-syntax where)
+  (alist>>
+   'return (lambda (d)
+             (datum->syntax where d))
+   'bind 
+   (lambda (syntax-value f)
+     (let ((naked-value (syntax->datum syntax-value)))
+       (f naked-value)))))
+
+(define-syntax (state-define stx)
+  (syntax-case stx ()
+    [(state-define (id state-name) body ...)
+     (syntax (define (id) (lambda (state-name) body ...)))]
+    [(state-define (id state-name var) body ...)
+     (syntax (define (id var)
+               (lambda (state-name) body ...)))]
+    [(state-define (id state-name var ...) body ...)
+     (syntax (define (id var ...)
+               (lambda (state-name) body ...)))]
+    [(state-define id val)
+     (syntax (define id (lambda (state) (list val state))))]))
+
+(state-define (-push stack x) (cons x stack))
              
 (provide mlet*
+         with-monad
          m-list
          m-set
          m-state
+         m-syntax
+         define-struct-adjusters
+         define-struct-getters
+         state-define
+         simple-state-struct
          lift-n
          lift-left
          lift-nth

@@ -1,6 +1,8 @@
 #lang racket
 
-(require utilities/lists)
+(require utilities/lists
+         (for-syntax utilities/lists)
+         racket/dict)
 
 (define-syntax let-if 
   (syntax-rules ()
@@ -12,7 +14,7 @@
   (syntax-case stx ()
     [(mlet* monad ((var exp) ...) body ...)
      (syntax 
-      (mlet-inner monad ((var exp) ...) (with-monad monad body ...)))]))
+      (with-monad monad (mlet-inner monad ((var exp) ...) body ...)))]))
 
 (define-syntax (with-monad stx)
   (syntax-case stx ()
@@ -31,16 +33,21 @@
                  body ...)))]))
 
 (define-syntax (mlet-inner stx)
-  (syntax-case stx ()
+  (syntax-case stx (non-monadically:)
+    [(mlet-inner monad ((non-monadically: pairs)) body ...)
+     (syntax (let* pairs body ...))]
     [(mlet-inner monad ((var exp)) body ...)
      (syntax ((bind-of monad) exp (lambda (var) 
                                     body ...)))]
+    [(mlet-inner monad ((non-monadically: pairs) (var1 exp1) ...) body ...)
+                 (syntax 
+                  (let* pairs (mlet-inner ((var1 exp1) ...) body ...)))]
     [(mlet-inner monad ((var0 exp0) (var1 exp1) ...) body ...)
      (syntax ((bind-of monad) exp0 (lambda (var0) 
                                      (mlet-inner monad ((var1 exp1) ...) body ...))))]))
 
 (define (retrieve key alist) 
-  (let-if r (assoc key alist) (cadr r) r))
+  (dict-ref alist key))
 
 (define (>partial f . pargs)
   (lambda args
@@ -55,36 +62,13 @@
 (define zero-of (>partial retrieve 'zero))
 (define plus-of (>partial retrieve 'plus))
 
-;; (define (split-after-liberally lst n)
-;;   (let loop 
-;;       ((n n)
-;;        (lst lst)
-;;        (acc-head (list)))
-;;     (cond ((= n 0)
-;;            (list (reverse acc-head) lst))
-;;           ((empty? lst)
-;;            (list (reverse acc-head) lst))
-;;           (#t (loop (- n 1)
-;;                     (cdr lst)
-;;                     (cons (car lst) acc-head))))))
-
-;; (define (bunch-by lst n)
-;;   (let loop ((lst lst)
-;;              (acc (list)))
-;;     (if (empty? lst) 
-;;         (reverse acc)
-;;         (let* ((parts (split-after-liberally lst n))
-;;                (head (car parts))
-;;                (tail (cadr parts)))
-;;           (loop tail (cons head acc)))))) 
-
 (define (alist-cons key val alist)
   (let loop
       ((alist alist)
        (past (list)))
-    (cond ((empty? alist) (cons (list key val) past))
+    (cond ((empty? alist) (cons (cons key val) past))
           ((eq? (car (car alist)) key)
-           (append (cons (list key val) past) (cdr alist)))
+           (append (cons (cons key val) past) (cdr alist)))
           (#t (loop (cdr alist) (cons (car alist) past))))))
 
 (define (alist>> maybe-alist . args)
@@ -95,9 +79,6 @@
                      alist))
        maybe-alist
        (bunch-by args 2))))
-
-(define (reduce f lst)
-  (foldl f (car lst) (cdr lst)))
 
 (define (fswap2 f)
   (lambda (a b)
@@ -123,8 +104,8 @@
 (define (lift-nth-plus n f monad)
   (lambda args
     (with-monad monad
-                (reduce m-plus (reverse (mlet* monad ((a (nth n args)))
-                                               (m-return (apply f (sub-nth n a args)))))))))
+                (reduce m-plus (mlet* monad ((a (nth n args)))
+                                               (m-return (apply f (sub-nth n a args))))))))
 
 (define (lift-n n f monad)
   (if (= n 0) f
@@ -137,11 +118,191 @@
              (lift-nth-plus i lifted monad)
              (- left 1))))))
 
+(define-syntax (static-lift stx)
+  (syntax-case stx ()
+    [(static-lift n f monad)
+     (with-syntax (((binder ...) (map 
+                               (lambda (i)
+                                 (datum->syntax (syntax monad) 
+                                                (list (string->symbol 
+                                                       (format "monadic-arg-~a" i))
+                                                      (string->symbol 
+                                                       (format "arg-~a" i)))))
+                               (range (syntax->datum (syntax n)))))
+                   ((monad-arg ...)
+                    (map 
+                     (lambda (i)
+                       (datum->syntax (syntax monad) 
+                                               (string->symbol 
+                                                (format "monadic-arg-~a" i))))
+                     (range (syntax->datum (syntax n)))))
+                   ((arg ...)
+                    (map 
+                     (lambda (i)
+                       (datum->syntax (syntax monad) 
+                                               (string->symbol 
+                                                (format "arg-~a" i))))
+                     (range (syntax->datum (syntax n))))))
+       (syntax (lambda (arg ...)
+                 (mlet* monad (binder ...)
+                      ((return-of monad) (f monad-arg ...))))))]))
 
+(define (add-unique item list pred)
+  (let loop ((past '())
+         (list list))
+    (cond ((empty? list)
+           (reverse (cons item past)))
+          ((pred item (car list))
+           (append (reverse past) list))
+          (else
+           (loop (cons (car list) past) (cdr list))))))
+
+(define (append-unique it ac pred)
+  (foldl
+   (lambda (item list)
+     (add-unique item list pred))
+   ac
+   it))    
+
+(define (map-cat-unique f v pred)
+  (let ((lists (map f v)))
+    (reduce 
+     (lambda (it ac)
+       (append-unique it ac pred))
+     lists)))
+
+(define (m-set pred)
+  (alist>>
+   'return (lambda (x) (list x))
+   'bind (lambda (v f)
+           (map-cat-unique f v pred))
+   'plus (lambda (a b) 
+           (append-unique a b pred))
+   'zero '()))
+
+(define m-state 
+  (alist>> 
+   'return (lambda (x) (lambda (state) (list x state)))
+   'bind (lambda (v f)
+           (lambda (state)
+             (let* ((val/state (v state))
+                    (val (car val/state))
+                    (new-state (cadr val/state))
+                    (new-f (f val)))
+               (new-f new-state))))
+   'plus (lambda (sf1 sf2)
+           (lambda (state)
+             (let ((val/state (sf2 state)))
+               (sf2 (cadr val/state)))))
+   'zero 'unbound))
+
+(define-syntax (define-struct-adjuster stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (with-syntax ((name (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol (string-append
+                                           "adjust-" 
+                                           (symbol->string (syntax->datum (syntax struct-id)))
+                                           "-"
+                                           (symbol->string (syntax->datum (syntax field-id)))))))
+                   (monadic-name 
+                    (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol (string-append
+                                           "adjust-" 
+                                           (symbol->string (syntax->datum (syntax struct-id)))
+                                           "-"
+                                           (symbol->string (syntax->datum (syntax field-id))) "^")))))
+       (syntax (begin 
+                 (define (name struct val) 
+                   (struct-copy struct-id struct [field-id val]))
+                 (define (monadic-name val)
+                   (lambda (state)
+                     (list val (name state val)))))))]))
+
+(define-syntax (define-struct-adjusters stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (syntax (define-struct-adjuster struct-id field-id))]
+    [(_ struct-id field-id0 field-id ...)
+     (syntax (begin (define-struct-adjuster struct-id field-id0) 
+                    (define-struct-adjusters struct-id field-id ...)))]))
+
+(define-syntax (define-struct-getter stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (with-syntax ((name (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol
+                           (string-append
+                            (symbol->string (syntax->datum (syntax struct-id)))
+                            "-"
+                            (symbol->string (syntax->datum (syntax field-id)))
+                            ))))
+                   (-name (datum->syntax 
+                          (syntax struct-id)
+                          (string->symbol
+                           (string-append
+                            (symbol->string (syntax->datum (syntax struct-id)))
+                            "-"
+                            (symbol->string (syntax->datum (syntax field-id)))
+                            "^")))))
+       (syntax (define (-name state)
+                 (list (name state) state))))]))
+
+(define-syntax (define-struct-getters stx)
+  (syntax-case stx ()
+    [(_ struct-id field-id)
+     (syntax (define-struct-getter struct-id field-id))]
+    [(_ struct-id field-id0 field-id ...)
+     (syntax (begin (define-struct-getter struct-id field-id0)
+                    (define-struct-getters struct-id field-id ...)))]))
+
+(define-syntax (simple-state-struct stx)
+  (syntax-case stx ()
+    [(_ struct-id field ...)
+     (syntax 
+      (begin (struct struct-id (field ...))
+             (define-struct-getters struct-id field ...)
+             (define-struct-adjusters struct-id field ...)))]))
+
+(define (push x)
+  (lambda (state)
+    (list x (cons x state))))
+
+(define pop
+  (lambda (state)
+    (list (car state) (cdr state))))
+
+
+
+(define stack+
+  (mlet* m-state
+         ((a pop)
+          (b pop))
+         (m-return (+ a b))))
+
+(define (m-syntax where)
+  (alist>>
+   'return (lambda (d)
+             (datum->syntax where d))
+   'bind 
+   (lambda (syntax-value f)
+     (let ((naked-value (syntax->datum syntax-value)))
+       (f naked-value)))))
+             
 (provide mlet*
+         with-monad
          m-list
+         m-set
+         m-state
+         m-syntax
+         define-struct-adjusters
+         define-struct-getters
+         simple-state-struct
          lift-n
          lift-left
          lift-nth
-         lift-nth-plus)
+         lift-nth-plus static-lift)
 

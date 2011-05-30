@@ -1,0 +1,94 @@
+#lang racket
+
+(require functional/monads
+         utilities/fancy-destructuring
+         racket/match
+         racket/dict)
+         
+
+;;; A monadic value here is a function which takes a 
+;;; state-doublet (local-state global-state) and returns 
+;;; a pair of whose car is a list of value/local-state 
+;;; pairs and whose cadr is a a global state.
+;;; Hence, return is:
+
+(define (pair a b)
+  (cons a b))
+
+(define (m-return val)
+  (lambda (st-doublet)
+    (pair
+     (list (pair val (car st-doublet)))
+     (cadr st-doublet))))
+
+(define (m-bind mv mf)
+  (lambda (st-dblt)
+    (match (mv st-dblt)
+      [(cons pairs gstate) 
+       (let loop ((pairs pairs)
+                  (gstate gstate)
+                  (pairs-acc '()))
+         (cond
+           ((empty? pairs)
+            (pair pairs-acc 
+                  gstate))
+           (else
+            (let* ((hd (car pairs))
+                   (tl (cdr pairs))
+                   (inner-r ((mf (car hd)) (pair (cdr hd) gstate)))
+                   (inner-pairs (car inner-r))
+                   (new-gstate (cdr inner-r)))
+              (loop tl new-gstate (append pairs-acc inner-pairs))))))])))
+
+(define-syntax (define<turtles> stx)
+  (syntax-case stx (^)
+    [(_ (id lstate-id gstate-id) body ...)
+     (syntax (define (id dblt)
+               (match dblt
+                 [(cons lstate-id gstate-id) 
+                  (begin body ...)])))]
+    [(_ (id lstate-id gstate-id ^ var) body ...)
+     (syntax (define (id var)
+               (lambda dblt
+                 (match dblt
+                   [(cons lstate-id gstate-id)
+                    (begin body ...)]))))]
+    [(_ (id lstate-id gstate-id ^ var ...) body ...)
+     (syntax (define (id var ...)
+               (lambda (dblt)
+                 (match dblt
+                   [(cons lstate-id gstate-id)
+                    (begin body ...)]))))]
+    [(_ id val)
+     (syntax (lambda (dblt)
+               (match dblt
+                 [(cons lstate-id gstate-id) 
+                  (pair (list (pair val lstate-id)) gstate-id)])))]))
+
+(define<turtles> (setg lo g ^ symbol value)
+  (pair (list (pair value lo))
+        (dict-set g symbol value)))
+
+
+(define<turtles> (getg lo g ^ symbol)
+  (pair (list (pair (dict-ref g symbol) lo))
+        g))
+
+(define<turtles> (setl lo g ^ symbol val)
+  (pair (list (pair val
+                    (dict-set lo symbol val)))
+        g))
+
+(define<turtles> (getl lo g ^ symbol)
+  (pair (list (pair (dict-ref lo symbol) lo))
+        g))
+
+(define<turtles> (split-setl lo g ^ symbol vals)
+  (pair 
+   (map (lambda (val)
+          (pair val (dict-set lo symbol val)))
+        vals)
+   g))
+
+(define init-state 
+  (pair '() '()))
