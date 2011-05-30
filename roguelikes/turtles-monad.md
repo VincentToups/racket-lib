@@ -979,4 +979,4 @@ extremely welcome!
 [turtle-wikipedia]: http://en.wikipedia.org/wiki/Turtle_graphics
 [c2-simple]: http://c2.com/xp/DoTheSimplestThingThatCouldPossiblyWork.html
 [previous-monad-tutorial]: http://dorophone.blogspot.com/2011/04/deep-emacs-part-1.html
-[github-racket]: 
+[github-racket]: https://github.com/VincentToups/racket-lib/blob/master/roguelikes/turtles-monad.md
