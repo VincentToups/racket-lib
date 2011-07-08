@@ -1,0 +1,75 @@
+#lang slideshow
+
+(require 
+ slideshow/pict
+ slideshow/code
+ functional/monads
+ racket/gui
+ (except-in roguelikes/turtles-monad circle rectangle))
+
+
+
+(slide #:title "Purely Function Turtle Graphics with Monads"
+       #:layout 'center
+ (turtles-go->pict 
+        (mlet* m-turtles
+         ((new-pos (jump-to 150 150))
+          (len     (setl 'len 2))
+          (new-pos (n-times
+                    (mlet* m-turtles
+                      ((len (getl 'len))
+                       (p   (move* len))
+                       (r   (turn (/ pi 1.99)))
+                       (len (setl 'len (+ len 2))))
+                      (m-return p))
+                    200)))
+         (m-return new-pos)))
+ (t "A monad tutorial!"))
+
+(slide #:title "What we want to accomplish"
+       (item "Understand monads.")
+       (item "Use a monad to represent a purely functional turtle graphics system.")
+       (item "Justify using a monadic solution by extending the monad to add powerful new features to our system."))
+
+(slide #:title "Turtle Graphics Primer"
+       (item "Turtle Graphics use a very clever turtle with a pen to draw pictures.")
+       (item "A program is a series of commands to the turtle which implicitly modify its state. Eg (in pseudo-code): ")
+       (item (subitem "move 10")
+             (subitem "turn pi/2")
+             (subitem "move 15")
+             (subitem "turn pi/4")
+             (subitem "move 20"))
+       (item "Produces:")
+       (item (turtles-go->pict
+              (mlet* m-turtles
+                     ((p (jump-to 25 25))
+                      (p (move-line 10))
+                      (r (turn (/ pi 2)))
+                      (p (move-line 15))
+                      (r (turn (/ pi 4)))
+                      (p (move-line 20)))
+                     (m-return p))
+              '(width . 50) '(height . 50))))
+             
+(slide #:title "Turtle Observations"
+       (item "Obviously stateful.")
+       (item "State includes:"
+             (subitem "Position (a pair of numbers)")
+             (subitem "Heading (a single number in radians)")
+             (subitem "a \"pen-down\" flag, pen color, memory, etc..."))
+       (item "Supposing we want to \"wear the hair shirt\" and simulate our turtle without side effects.  How?"))
+
+(current-code-font (make-object font% 16 'swiss))
+
+(slide #:title "Sewing the Hair Shirt"
+       (item "Turtle Representation, an association list"
+             (subitem (code (define (make-turtle) (list (cons 'pos (point 150 150))
+                                                        (cons 'facing 0)
+                                                        (cons 'pen-state 'down)))
+                            )))
+       (item "Each \"command\" is a function which accepts a state and returns..?")
+       (item "Well, at least a new state.")
+       (item "We'll also let turtle functions return a value in addition to a new state.")
+       (item "That is, commands or turtle functions return a doublet of values, the first an arbitrary value and the second a new state.")
+       ) 
+

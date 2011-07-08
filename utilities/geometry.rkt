@@ -255,7 +255,7 @@
 
 (define (make-line-via-regression . points)
   (let ((points (if (= 1 (length points)) (car points) points)))
-    (let* ((points (sort points (fn (p1 p2) (< (point-x p1) (point-y p2)))))
+    (let* ((points (sort points (fn (p1 p2) (< (point-x p1) (point-x p2)))))
            (m (length points))
            (xs (map point-x points))
            (ys (map point-y points))

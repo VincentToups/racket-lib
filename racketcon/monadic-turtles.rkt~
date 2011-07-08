@@ -1,0 +1,11 @@
+#lang racket
+
+(require 
+ racket/gui
+ racket/match
+ racket/dict
+ (rename-in (only-in slideshow/pict bitmap) [bitmap bitmap->pict])
+ utilities/planar-geometry
+ utilities/fancy-destructuring
+ utilities/draw-planar-geometry)
+

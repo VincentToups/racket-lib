@@ -54,9 +54,9 @@
 (define (all-by lst pred)
   (if (foldl
        (lambda (it ac)
-             (and ac (pred it)))
-           (pred (car lst))
-           (cdr lst)) #t #f))
+         (and ac (pred it)))
+       (pred (car lst))
+       (cdr lst)) #t #f))
 
 (define (identity x) x)
 
@@ -64,11 +64,12 @@
   (all-by lst identity))
 
 (define (any-by lst pred)
-  (if (foldl 
-       (lambda (it ac)
-         (or ac (pred it)))
-       (pred (car lst))
-       (cdr lst)) #t #f))
+  (if (empty? lst) #f
+      (if (foldl 
+           (lambda (it ac)
+             (or ac (pred it)))
+           (pred (car lst))
+           (cdr lst)) #t #f)))
 
 (define (any lst)
   (any-by lst identity))
@@ -80,8 +81,8 @@
 
 (define (cons-n n el lst)
   #|
-    proc cons-n n el lst conses el n times onto lst
-    |#
+  proc cons-n n el lst conses el n times onto lst
+  |#
   (let loop ((i n) (out lst))
     (if (= i 0) out
         (loop (- i 1) (cons el out)))))
@@ -89,9 +90,9 @@
 
 (define (rep-list n lst)
   #|
-    proc rep-list n lst
-      returns a list of lst repeated n times
-    |#
+  proc rep-list n lst
+  returns a list of lst repeated n times
+  |#
   (if (= 0 n) '()
       (reverse (let recur ((rst lst) (out '()))
                  (if (null? rst) out
@@ -106,15 +107,15 @@
 
 (define (foldl-accumulate f init lst)
   (reverse (foldl
-   (lambda (it ac)
-     (let ((last (car ac)))
-       (cons (f it last) ac)))
-   (list init)
-   lst)))
+            (lambda (it ac)
+              (let ((last (car ac)))
+                (cons (f it last) ac)))
+            (list init)
+            lst)))
 
 (define (reduce-accumulate f lst)
   (foldl-accumulate f (car lst) (cdr lst)))
-  
+
 (define (sum lst) (reduce + lst)) 
 (define (cum-sum lst) (reduce-accumulate + lst))
 
@@ -128,9 +129,9 @@
     ((3)
      (let loop ((acc (list (car args))))
        (cond 
-         ((> (car acc) (- (cadr args) 1)) (reverse (cdr acc)))
-         ((= (car acc) (- (cadr args) 1)) (reverse acc))
-         (else (loop (cons (+ (caddr args) (car acc)) acc))))))))
+        ((> (car acc) (- (cadr args) 1)) (reverse (cdr acc)))
+        ((= (car acc) (- (cadr args) 1)) (reverse acc))
+        (else (loop (cons (+ (caddr args) (car acc)) acc))))))))
 
 (define (list-zip . args)
   (apply map list args))
@@ -145,10 +146,31 @@
        (cons (car pair) (cadr pair)))
      pairs)))
 
+(define (add-to-front element list)
+  (if (not (list? list)) (error "Second argument to prepend must be a list.")
+      (cons element list)))
+
+(define (add-to-back elememt list)
+  (if (not (list? list)) (error "Second argument to prepend must be a list.")
+      (reverse (cons elememt (reverse list)))))
+
+(define (interleave l1 l2)
+  (let loop
+      ((l1 l1)
+       (l2 l2)
+       (ac '()))
+    (cond ((empty? l1) (append (reverse ac) l2))
+          ((empty? l2) (append (reverse ac) l1))
+          (else
+           (loop l2 (cdr l1) (cons (car l1) ac))))))
+
 (provide nth sub-nth split-after-liberally 
          bunch-by trans-nth all all-by any 
          any-by rep-list cons-n reduce sum 
          export len none none-by range
          foldl-accumulate reduce-accumulate
-         cum-sum list-zip drop-last alist)
+         cum-sum list-zip drop-last alist
+         interleave
+         add-to-back add-to-front)
+
 

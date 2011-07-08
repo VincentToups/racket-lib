@@ -1,1 +1,1 @@
-("5.1.1" ("b7e9b5ef20d5ef72b97d59185b95cb1df1e1703b" . "ebe6cf57ff85ac9257a212ce03b8fea0d324d6bb") (collects #"errortrace" #"errortrace-key.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"dict.rkt") (collects #"racket" #"lang" #"reader.rkt"))
+("5.1.1" ("7b5a54e86d97d2319b733e51090ce9d3fa3cee5d" . "93c37afe04801dd5d8fcc550c82a35b3566fa4f4") (collects #"errortrace" #"errortrace-key.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"dict.rkt") (collects #"racket" #"class.rkt") (collects #"racket" #"lang" #"reader.rkt"))

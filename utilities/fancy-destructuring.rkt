@@ -1,5 +1,6 @@
 #lang racket
-(require racket/dict)
+(require racket/dict
+         racket/class)
 
 (define (sloppy-car o)
   (if (< (length o) 1) 'unbound
@@ -175,6 +176,74 @@
     
     [(dlet1 x expr body ...)
      (syntax (let ((x expr)) body ...))]
+
+    ;;;
+    ;; [(dlet1 (:o name field-id) object-expr body ...)
+    ;;  (syntax (dlet1 name (get-field field-id object-expr) body ...))]
+    ;; [(dlet1 (:o name0 field-id0 subsequent ...) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((tbl object-expr))
+    ;;     (dlet1 name0 (get-field field-id object-expr)
+    ;;            (dlet1 (:o subsequent ...) tbl body ...))))]
+    
+    ;; [(dlet1 ((:o) name field-id) object-expr body ...)
+    ;;  (syntax (dlet1 name (get-field field-id object-expr) body ...))]
+    ;; [(dlet1 ((:o) name0 field-id0 subsequent ...) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((tbl object-expr))
+    ;;     (dlet1 name0 (get-field field-id object-expr)
+    ;;            (dlet1 (:o subsequent ...) tbl body ...))))]
+
+    ;; [(dlet1 ((:o or or-expr)) expr body ...)
+    ;;  (syntax (begin body ...))]
+    ;; [(dlet1 ((:o or or-expr) name field-id) object-expr body ...)
+    ;;  (syntax (dlet1 name (dict-ref-or object-expr field-id or-expr) body ...))]
+    ;; [(dlet1 ((:o or or-expr) name0 field-id0 subsequent ...) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((tbl object-expr)
+    ;;          (orv or-expr))
+    ;;     (dlet1 name0 (dict-ref-or tbl field-id0 orv)
+    ;;            (dlet1 ((:o or orv) subsequent ...) tbl body ...))))]
+
+    ;; [(dlet1 ((:o as as-name)) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((as-name object-expr))
+    ;;     (begin body ...)))]
+
+    ;; [(dlet1 ((:o as as-name) name0 field-id0) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((as-name object-expr))
+    ;;     (dlet1 name0 (dict-ref as-name field-id0 'unbound)
+    ;;            (dlet1 (:o name0 field-id0) as-name body ...))))]
+
+    ;; [(dlet1 ((:o as as-name) name0 field-id0 subsequent ...) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((as-name object-expr))
+    ;;     (dlet1 name0 (dict-ref as-name field-id0 'unbound)
+    ;;            (dlet1 (:o subsequent ...) as-name body ...))))]
+
+    ;; [(dlet1 ((:o as as-name or or-val)) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((as-name object-expr))
+    ;;     (begin body ...)))]
+    ;; [(dlet1 ((:o as as-name or or-val) name0 field-id0) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((as-name object-expr))
+    ;;     (dlet1 ((:o or or-val) name0 field-id0) as-name body ...)))]
+    ;; [(dlet1 ((:o as as-name or or-val) name0 field-id0 subsequent ...) object-expr body ...)
+    ;;  (syntax 
+    ;;   (let* ((as-name object-expr))
+    ;;     (dlet1 ((:o or or-val) name0 field-id0 subsequent ...) as-name body ...)))]
+    ;; [(dlet1 ((:o or or-val as as-name)) object-expr body ...)
+    ;;  (syntax
+    ;;   (dlet1 ((:o as as-name or or-val)) object-expr body ...))]
+    ;; [(dlet1 ((:o or or-val as as-name) thing ...) object-expr body ...)
+    ;;  (syntax
+    ;;   (dlet1 ((:o as as-name or or-val) thing ...) object-expr body ...))]
+    
+    [(dlet1 x expr body ...)
+     (syntax (let ((x expr)) body ...))]
+    
     ))
 
 (define-syntax (elet stx)

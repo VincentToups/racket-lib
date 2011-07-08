@@ -42,7 +42,3 @@
      (syntax (apply one-of-f (cons (list weight0 (lambda () expr0 ...)) (one-of-helper (weight expr ...) ...))))]))
                            
 (provide one-of)
-
-
-
-    

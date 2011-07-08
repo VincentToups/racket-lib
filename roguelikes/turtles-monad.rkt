@@ -6,15 +6,22 @@
          utilities/fancy-destructuring
          utilities/randomness
          utilities/dont-do
+         utilities/planar-geometry
+         utilities/draw-planar-geometry
          (except-in utilities/lists any)
          racket/match
          racket/dict
+         (rename-in (only-in slideshow/pict bitmap) [bitmap bitmap->pict])
          racket/gui)
          
-(define (pair a b)
-  (cons a b))
 
-(struct doublet (a b))
+(struct doublet (a b)
+        #:property
+        prop:custom-write
+        (lambda (s port mode)
+          (display "(doublet " port)
+          (display (doublet-a s) port)
+          (display (doublet-b s) port)))
 
 ;;; A monadic value here is a function which takes a 
 ;;; state-doublet (local-state global-state) and returns 
@@ -27,6 +34,8 @@
     (doublet
      (list (doublet val (doublet-a st-doublet)))
      (doublet-b st-doublet))))
+
+
 
 (define (m-bind mv mf)
   (lambda (st-dblt)
@@ -51,11 +60,7 @@
                   (new-gstate (doublet-b inner-r)))
              (loop tl new-gstate (append pairs-acc inner-pairs))))))])))
 
-(define m-turtles
-  (list (cons 'bind m-bind)
-        (cons 'return m-return)
-        (cons 'plus #f)
-        (cons 'zero (lambda (dblt) (pair '() (cdr dblt))))))
+
 
 (define-syntax (define<turtles> stx)
   (syntax-case stx (^)
@@ -105,11 +110,32 @@
                           (dict-set lo symbol val)))
            g))
 
+(define<turtles> (turtles-zero lo gl)
+  (doublet '() gl))
+
+(define<turtles> (turtles-split2 lo gl ^ tf1 tf2)
+  (let* ((r1 (tf1 (doublet lo gl)))
+         (new-gl (doublet-b r1))
+         (r2 (tf2 (doublet lo new-gl))))
+    (doublet
+     (append
+      (doublet-a r1)
+      (doublet-a r2))
+     (doublet-b r2))))
+
 (define<turtles> (dipl lo g ^ symbol fun)
   (let ((new-val (fun (dict-ref lo symbol #f))))
     (doublet (list (doublet new-val
                             (dict-set lo symbol new-val)))
              g)))
+
+(define m-turtles
+  (list (cons 'bind m-bind)
+        (cons 'return m-return)
+        (cons 'plus #f)
+        (cons 'zero turtles-zero)))
+
+(define turtles-return (dict-ref m-turtles 'return))
 
 (define (getl* sym)
   (lambda (a-doublet)
@@ -136,8 +162,13 @@
         vals)
    g))
 
-(struct point (x y))
-(struct line (p1 p2))
+(define<turtles> (pass lo gl)
+  (doublet (list (doublet 'pass lo)) gl))
+
+
+
+;; (struct point (x y))
+;; (struct line (p1 p2))
 
 (define init-state 
   (doublet '() '()))
@@ -152,33 +183,7 @@
   (point (cos dir) 
          (sin dir)))
 
-(define (scale pt amt)
-  (match pt
-    [(point x y) (point (* x amt) (* y amt))]))
-
-(define (point+ p1 p2)
-  (match-let 
-   ([(point x1 y1) p1]
-    [(point x2 y2) p2])
-   (point 
-    (+ x1 x2)
-    (+ y1 y2))))
-
-(define (point- p1 p2)
-  (match-let 
-   ([(point x1 y1) p1]
-    [(point x2 y2) p2])
-   (point 
-    (- x1 x2)
-    (- y1 y2))))
-
-(define (point-len pt)
-  (match pt
-    [(point x y) (sqrt (+ (* x x) (* y y)))]))
-
-(define (point-dist p1 p2)
-  (point-len (point- p1 p2)))
-
+(define scale point-scale)
 
 (define (move amt)
   (mlet* m-turtles
@@ -225,7 +230,7 @@
 (define (add-line x1 y1 x2 y2)
   (mlet* m-turtles 
          ((lines (getg 'draw-these))
-          (lines (setg 'draw-these (cons (line 
+          (lines (setg 'draw-these (cons (line-segment 
                                           (point x1 y1)
                                           (point x2 y2))
                                          (if lines lines '())))))
@@ -234,7 +239,7 @@
 (define (add-line-pts p1 p2)
   (mlet* m-turtles 
          ((lines (getg-or 'draw-these '()))
-          (lines (setg 'draw-these (cons (line 
+          (lines (setg 'draw-these (cons (line-segment 
                                           p1
                                           p2)
                                          lines))))
@@ -256,11 +261,12 @@
              ((_ fun))
              (n-times fun (- n 1)))))
 
-(define (draw-line dc a-line)
-  (match-let* ([(line p1 p2) a-line]
-               [(point x1 y1) p1]
-               [(point x2 y2) p2])
-              (send dc draw-line x1 y1 x2 y2)))
+(define (n-times-call fun n)
+  (if (= n 1) (fun)
+      (mlet* m-turtles
+             ((_ (fun)))
+             (n-times-call fun (- n 1)))))
+
 
 (define (n-gon n edge-len)
   (let* ((int-ang (/ (* (- n 2) pi) n))
@@ -272,22 +278,8 @@
             (m-return p))
      n)))
 
-(struct circle (c r))
+;; (struct circle (c r))
 
-(define (draw-circle dc a-circle)
-  (match-let* ([(circle c r) a-circle]
-               [(point x y) c])
-              (send dc draw-arc x y r r 0 (* 2 pi))))
-
-(define (draw-thing dc thing)
-  (cond
-   ((line? thing)
-    (draw-line dc thing))
-   ((circle? thing)
-    (draw-circle dc thing))
-   ((procedure? thing)
-    (thing dc))
-   (else 'pass)))
 
 (define (jitter-by mag n)
   (mlet* m-turtles
@@ -305,7 +297,7 @@
 (define *current-drawing* '())
 
 (define (draw-current-drawing self dc)
-  (for-each (>partial draw-thing dc) (send (send self get-parent) get-things-to-draw )))
+  (for-each (>partial draw-shape dc) (send (send self get-parent) get-things-to-draw )))
 
 (define turtle-frame%
   (class frame%
@@ -332,117 +324,163 @@
 
 
 
-(define frame (new turtle-frame%
-                   [label "Turtles!"]
-                   [width 300]
-                   [height 300]
-                   [things-to-draw '()]))
+                                        ;(define frame (new turtle-frame%
+                                        ;                   [label "Turtles!"]
+                                        ;                   [width 300]
+                                        ;                   [height 300]
+                                        ;                   [things-to-draw '()]))
+                                        ;
+                                        ;(define canvas (new canvas%
+                                        ;                    [parent frame]
+                                        ;                    [paint-callback draw-current-drawing]))
+                                        ;
+                                        ;
+                                        ;(send frame show #t)
+                                        ;
+                                        ;(send frame set-things-to-draw!
+                                        ;      (list
+                                        ;       (line-segment (point 500 250)
+                                        ;                     (point 500 0))))
+                                        ;(send canvas refresh-now)
 
-(define canvas (new canvas%
-                    [parent frame]
-                    [paint-callback draw-current-drawing]))
-
-
-(send frame show #t)
-
-(send frame set-things-to-draw!
-      (list
-       (line (point 500 250)
-             (point 500 0))))
-(send canvas refresh-now)
-
+(define turtles-go-frame #f)
 (define (turtles-go
-         turtle-f)
-  (let* ((done (turtle-f init-state))
-         (gstate (doublet-b done))
-         (things-to-draw (dict-ref gstate 'draw-these '())))
-    (send frame set-things-to-draw! things-to-draw)
-    (send frame show #t)
-    (send canvas refresh-now)))
+         turtle-f . optional-arg-dict)
+  (dlet1 ((:> or 
+              '((width . 300)
+                (height . 300)
+                (label . "I Like Turtles!")))
+          width 'width
+          height 'height
+          label 'label) optional-arg-dict
+          (let* ((done (turtle-f init-state))
+                 (gstate (doublet-b done))
+                 (things-to-draw (dict-ref gstate 'draw-these '()))
+                 (frame (new turtle-frame%
+                             [label label]
+                             [width width]
+                             [height height]
+                             [things-to-draw '()]))
+                 (canvas (new canvas%
+                              [parent frame]
+                              [paint-callback draw-current-drawing])))
+            (if turtles-go-frame (send turtles-go-frame show #f) #f)
+            (send frame set-things-to-draw! things-to-draw)
+            (send frame show #t)
+            (send canvas refresh-now)
+            (set! turtles-go-frame frame))))
 
-(turtles-go
- (mlet*
-  m-turtles
-  ((_ (jump-to 150 150))
-   (_ (split-setl 'move*-fun (list add-line-pts add-circle-pts)))
-   (_ (n-times (mlet* m-turtles
-                      ((p (jitter-by 1 4))
-                       (h (split-setl 'helicity '(-1 1)))
-                       (r (turn (/ pi 4)))
-                       (ln (move* 20))
-                       (r (turn (- (/ pi 8))))
-                       (ln (move* 15)))
-                      (m-return ln)) 2)))
-  (m-return #t)))
+(define (draw-things dc things)
+  (for-each (>partial draw-shape dc) things))
 
-(dont-do
+(define (turtles-go->svg turtle-f . optional-arg-dict)
+  (dlet1 ((:> or 
+              '((write-to . "/tmp/turtle.svg")
+                (width . 300)
+                (height . 300)))
+          width 'width
+          height 'height
+          write-to 'write-to) optional-arg-dict
+          (let* ((done (turtle-f init-state))
+                 (gstate (doublet-b done))
+                 (things-to-draw (dict-ref gstate 'draw-these '()))
+                 (svg (new svg-dc% [width width]
+                           [height height]
+                           [output write-to]
+                           [exists 'replace])))
+            (send svg start-doc "Turtle!")
+            (send svg start-page)
+            (draw-things svg things-to-draw)
+            (send svg end-page)
+            (send svg end-doc))))
 
- (turtles-go
-  (mlet* m-turtles
-         ((_ (jump-to 150 150))
-          (len (setl 'len 1))
-          (_ (n-times
-              (mlet* m-turtles
-                     ((len (getl 'len))
-                      (p (move* len))
-                      (r (turn (/ pi 2)))
-                      (len (setl 'len (+ len 1))))
-                     (m-return p))
-              100)))
-         (m-return _)))
+
+(define (draw-self . args)
+  (match args
+    [(list)
+     (draw-self 4)]
+    [(list scale)
+     (mlet* m-turtles
+            ((p (getl 'pos))
+             (r (getl 'facing))
+             (np (move scale))
+             (c (add-circle-pts p np))
+             (np (move scale))
+             (l (add-line-pts p np))
+             (p (setl 'pos p)))
+            (m-return p))]))
+
+(define (turtles-go->bitmap turtle-f . optional-arg-dict)
+  (dlet1 ((:> or 
+              '((also-save-as . #f)
+                (extension . png)
+                (width . 300)
+                (height . 300)))
+          width 'width
+          height 'height
+          also-save-as 'also-save-as
+          extension 'extension
+          ) optional-arg-dict
+          (let* ((done (turtle-f init-state))
+                 (gstate (doublet-b done))
+                 (things-to-draw (dict-ref gstate 'draw-these '()))
+                 (bitmap (make-object bitmap% width height #f #f))
+                 (bitmap-dc (new bitmap-dc% [bitmap bitmap])))
+            (send bitmap-dc erase)
+            (send bitmap-dc set-background "white")
+            (send bitmap-dc clear)
+            (draw-things bitmap-dc things-to-draw)
+            (if also-save-as
+                (send bitmap save-file also-save-as extension)
+                #f)
+            bitmap)))
+
+(define (turtles-go->pict turtle-f . optional-arg-dict)
+  (let ((bitmap (apply turtles-go->bitmap turtle-f optional-arg-dict)))
+    (bitmap->pict bitmap)))
+
+
+(provide
+ m-turtles
+ define<turtles>
+ turtles-go->pict
+ turtles-go->bitmap
+ draw-self
+ init-state
+ setg
+ getg
+ getg-or
+ setl
+ getl
+ getl-or
+ split-setl
+ dipl
+ dipg
+ jump-to
+ direction->vector
+ move
+ move-line
+ move*
+ face-in
+ set-helicity
+ turn
+ helicity-split
+ draw-things
+ turtles-go->svg
+ add-line
+ add-line-pts
+ add-circle-pts
+ n-times
+ n-gon
+ jitter-by
+ turtles-go
+ pass
+ doublet-a
+ doublet-b
+ turtles-zero
+ turtles-return
+ n-times-call
+ (all-from-out utilities/planar-geometry)
+ (all-from-out utilities/draw-planar-geometry))
+
  
- (turtles-go
-  (mlet* m-turtles
-         ((_ (jump-to 150 150))
-          (len (setl 'len 2))
-          (_ (n-times
-              (mlet* m-turtles
-                     ((len (getl 'len))
-                      (p (move* len))
-                      (r (turn (/ pi 1.99)))
-                      (len (setl 'len (+ len 2))))
-                     (m-return p))
-              200)))
-         (m-return _)))
-               
-               
- 
-(turtles-go
- (mlet* m-turtles
-        ((p (split-setl
-             'pos
-             (list (point 150 150)
-                   (point 200 150)
-                   (point 150 200)
-                   (point 200 200))))
-         (h (split-setl
-             'helicity '(-1 1)))
-          (p2 (n-gon 6 30)))
-         (m-return p2)))
-
-(turtles-go
- (mlet* m-turtles
-        ((p (split-setl
-             'pos
-             (list (point 150 150)
-                   (point 200 150)
-                   (point 150 200)
-                   (point 200 200))))
-         (h (split-setl
-             'helicity '(-1 1)))
-          (p2 (n-gon 6 30)))
-         (m-return p2)))
-
-(turtles-go
- (mlet* m-turtles
-        ((p (split-setl
-             'pos
-             (list (point 150 150)
-                   )))
-         (n (split-setl
-             'n '(3 5 7 9 11 13)))
-          (p2 (n-gon n 30)))
-         (m-return p2)))
-
-
-)

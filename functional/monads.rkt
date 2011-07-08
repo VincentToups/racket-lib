@@ -33,20 +33,29 @@
                  body ...)))]))
 
 (define-syntax (mlet-inner stx)
-  (syntax-case stx (non-monadically:)
+  (syntax-case stx (non-monadically: if:)
     [(mlet-inner monad ((non-monadically: pairs)) body ...)
      (syntax (let* pairs body ...))]
+    [(mlet-inner monad ((name (if: monadic-val true-expr false-expr))) body ...)
+     (syntax (mlet-inner monad ((id monadic-val) (name (if id true-expr false-expr))) body ...))]
     [(mlet-inner monad ((var exp)) body ...)
      (syntax ((bind-of monad) exp (lambda (var) 
                                     body ...)))]
     [(mlet-inner monad ((non-monadically: pairs) (var1 exp1) ...) body ...)
      (syntax 
       (let* pairs (mlet-inner monad ((var1 exp1) ...) body ...)))]
+    [(mlet-inner monad ((name (if: monadic-val true-expr false-expr)) (var1 exp1) ...) body ...)
+     (syntax 
+      (mlet-inner monad ((id monadic-val) (name (if id true-expr false-expr)) (var1 exp1) ...) body ...))]
     [(mlet-inner monad ((var0 exp0) (var1 exp1) ...) body ...)
      (syntax ((bind-of monad) 
               exp0 
               (lambda (var0) 
                 (mlet-inner monad ((var1 exp1) ...) body ...))))]))
+
+;; (define-syntax (monadically stx)
+;;   (syntax-case stx ( <- :- )
+;;     [(monadically monad expression ...)
 
 (define (retrieve key alist) 
   (dict-ref alist key))
@@ -86,12 +95,30 @@
   (lambda (a b)
     (f b a)))
 
+
+
+
+
 (define m-list (alist>> 'bind 
                         (lambda (v f)
                           (reduce (fswap2 append) (map f v)))
                         'return list
                         'zero (list)
                         'plus append))
+
+(define m-list-interleave (alist>> 'bind 
+                                   (lambda (v f)
+                                     (reduce (fswap2 interleave) (map f v)))
+                                   'return list
+                                   'zero (list)
+                                   'plus interleave))
+
+
+(define m-maybe (alist>> 'bind (lambda (v f)
+                                 (if v (f v) #f))
+                         'return (lambda (x) x)
+                         'zero #f
+                         'plus (lambda (a b) (and a b))))
 
 (define (lift-left f monad)
   (lambda (v . args)
@@ -312,9 +339,11 @@
 (provide mlet*
          with-monad
          m-list
+         m-list-interleave
          m-set
          m-state
          m-syntax
+         m-maybe
          define-struct-adjusters
          define-struct-getters
          state-define

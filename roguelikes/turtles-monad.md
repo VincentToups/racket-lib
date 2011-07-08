@@ -22,7 +22,7 @@ anyway.
 Another part of me, however, thinks its too bad.  There are some
 problems which find elegant expression by recourse to monadic
 computation.  Monadic parser combinators are an example, I think.  I'd
-always found parsing to be an unapproachable activity, requireing
+always found parsing to be an unapproachable activity, requiring
 special use tools and an understanding of and separate domain specific
 languages to program them.  If one develops monadic parser combinators
 in Lisp, with the appropriate binding expressions to clean up the
@@ -37,7 +37,7 @@ and present things in the order they occured to me, and hopefully give
 one a flavor of how one constructs a monad for a specific purpose,
 rather than grabbing one off the shelf.  Also, for variety, we'll be
 using Scheme, rather than Emacs Lisp.  While the code here is probably
-a stonesthrow away from any Scheme implementation, I'm working in
+a stone's throw away from any Scheme implementation, I'm working in
 Racket.
 
 Remember Turtle Graphics?
@@ -92,8 +92,8 @@ turtle to repeat some sequence of commands which accumulate into
 elaborate patterns.  Pretty neat stuff.
 
 At first I wanted to create a turtle graphics system in a purely
-functional (at least as purely functional as possible), as a learning
-exercise.  But then I got to thinking:
+functional style (at least as purely functional as possible), as a
+learning exercise.  But then I got to thinking:
 
 What about a Hyperturtle?
 -------------------------
@@ -136,7 +136,7 @@ Monads in Scheme (a diversion)
 If you've read any of my [other posts about
 monads][previous-monad-tutorial], you know how this is going to go.
 We are going to define a macro to facilitate monadic computation.
-Since this is a kind of advanced article, I'm going to asssume you
+Since this is a kind of advanced article, I'm going to assume you
 have the basic idea about `bind` and `return` more or less down.  If I
 say that:
 
@@ -170,12 +170,12 @@ monadic and non-monadic binding:
 Causes `q` to be bound only once per `x`, rather than bound as a
 monadic value.  We're going to be liberally using `mlet*` throughout 
 the rest of the article, so if you don't see how it works, check out
-the other monad tutorial.
+the [other monad tutorial][previous-monad-tutorial].
 
 Turtle Functions
 ----------------
 
-Let's backtrack and think about the regular old turlte monad.  A basic
+Let's backtrack and think about the regular old turtle monad.  A basic
 turtle might be implemented as a dictionary containing keys like
 `position`, `direction`, `pen-status`, etc.  In the land of
 imperative, side-effect producing programs we'd probably just have a
@@ -197,7 +197,10 @@ What about querying the state?  We might want, for instance, to make
 our turtle avoid certain regions of space, which means we'll need to
 make inquiries into the state of the turtle, and we'd like to do so in
 a standard way.  We'd also like to be able to combine queries with
-modification.  What kind of function enables this behavior?
+modification.  What kind of function enables this behavior?  Well,
+consider these:
+
+(Note for non-lispers, `cons` simply `cons`structs a _pair_ or tuple.)
 
     (require racket/dict)
     
@@ -255,19 +258,32 @@ turtle-function.  This is an important class of functions which we'll
 call "turtle combinators."  Think of such a function as a turtle
 function "waiting" for a value before it commits to being a particular
 turtle function.  `try-to-move` represents the family of all movement
-functions parameterized by `amt`.  Each call to `try-to-move` returns
+functions parametrized by `amt`.  Each call to `try-to-move` returns
 such a function.
 
 Thinking Monadically
 --------------------
 
 Ok, so we've cooked up an ad-hoc formalism for dealing with our purely
-functional turtle.  Lets relate this to a monad.  
+functional turtle.  Lets relate this to a monad.  A monad relates the
+following types of interest:
+
++    Values
+     These are just any old kind of value held "in" the monad.
++    Monadic Values
+     These are the "container" into which values go.
++    Monadic Functions
+     These are functions which take a Value and return a
+     Monadic Value.
+
+Graphically:
+
+![monadic-types](https://s3.amazonaws.com/VincentToupsScreencasts/monadic-types-of-interest-small.png)
 
 So one way of thinking about monads that comes up a lot is that there
 is a monad for every data structure.  Lists form a monad, Trees form a
 monad, the maybe monad is just a data type consisting of two kinds of
-things `(Just <something>)` and `(None)` (in much the same way that a
+things, `(Just <something>)` and `(None)` (in much the same way that a
 list is either an element and a pointer to another list or nil).
 
 We can imagine that a function of state which returns a value and a
@@ -279,16 +295,22 @@ tortured, really.  You can put an element "into" a state function:
         (list x state)))
 
 Returns a state function that itself returns `x` when you ask for it
-with a state.  You get data out of a state function by passing a state
+with a state.  In terms of our types of interest: `x` is a Value,
+`(lambda (state) ...)` is a Monadic Value and `insert-into-state` is
+a Monadic Function.
+
+You get data out of a state function by passing a state
 in:
 
     (define (val-of pair) (car pair))
     (define (state-of pair) (cdr pair))
-    (val-of ( (insert-into-state 10) '() )) -> 10
+    (val-of ((insert-into-state 10) '() )) -> 10
 
 For the sake of driving the analogy home,
 
     (first (list 10)) -> 10
+
+(Type note: 10 is a Value, `(list 10)` is a Monadic Value.)
 
 is the equivalent code for the data structure called a list.  We put
 things in, and take them out again.  So if these state functions are a
@@ -298,6 +320,8 @@ these are:
 
     (define (list-return x) (list x))
 
+(Type note: `list-return` is a Monadic Function.)
+
     (define (reduce f lst)
       (foldl f (car lst) (cdr lst)))
 
@@ -306,7 +330,13 @@ these are:
 
 It should be reasonably clear why `insert-into-state` is
 `state-return`.  It constitutes the operation of placing any object
-into the monad.  What about bind?  Well, squint at the list-bind
+into the monad.  
+
+Graphically:
+
+![return](https://s3.amazonaws.com/VincentToupsScreencasts/monadic-return-small.png)
+
+What about bind?  Well, squint at the list-bind
 operation and dig this: its essence is that it takes the monadic
 function (a function which represents a monadic value "waiting" for
 some input to compute itself) maps it over the values in the monad,
@@ -319,6 +349,10 @@ pull out the following all right description for what bind does:
 > function to them, which results in lots of little monadic values.
 > These monadic values are combined, finally, into one big monadic
 > value, which is returned.
+
+Graphically: 
+
+![bind](https://s3.amazonaws.com/VincentToupsScreencasts/monadic-bind.png)
 
 List-bind takes the elements out of a list, applies a function to them
 to generate a bunch of lists, and combines them together.
@@ -424,9 +458,9 @@ once_.  That is, we want to be able to say something like
 
     (parallel-rotate (/ pi 2) (- (/ pi 2)))
 
-And have our system interpret as a command which results in the turtle
-splitting into _two_ turtles, one which rotates +pi/2 and the other
-which rotates -pi/2.  In other words, we want to allow multiple
+And have our system interpret it as a command which results in the
+turtle splitting into _two_ turtles, one which rotates +pi/2 and the
+other which rotates -pi/2.  In other words, we want to allow multiple
 possible outcomes to each monadic function, which sounds a lot like
 the list monad.  Monadic functions of the list monad take a single
 value and return a list of values.  Depending on one's perspective, it
@@ -518,7 +552,7 @@ We return a state function which destructures the st-pair input,
 returning a pair containing a list with one element, a val/local-state
 pair, and the global state.
 
-Now the coup de grace, what is the find operation for this crazy
+Now the coup de grace, what is the bind operation for this crazy
 monad?  Well, it is similar to the bind operation for the
 sequence-of-state monad, _except_ we have to deal with the global
 state.  Each monadic value needs to use the previously calculated
@@ -574,7 +608,7 @@ later, though, we're going to use racket's dict library to wrap them:
     (define (setg key val) ; setg = set global
      (lambda (state-doublet)
        (cons (list (cons val (car state-doublet)))
-             (hash-set (cdr state-doublet) key bal))))
+             (hash-set (cdr state-doublet) key val))))
 
 Ok, so our pattern sense should be tingling.  We keep writing
 functions which take some parameters now and return a state function.
@@ -582,7 +616,7 @@ Let's whip up some notation for this kind of common task.  Eventually
 our library of combinators/monadic functions/monadic values will be
 large enough that merely `mlet*` will be sufficient to write most
 functions of interest, but until then, its nice to have some syntactic
-sugar.  Consider the hygeinic macro:
+sugar.  Consider the hygienic macro:
 
     (require racket/match)
 
@@ -756,10 +790,10 @@ call our monadic function on an initial state (
 ), take apart the returned state doublet, grab the `draw-these` data
 from the global state, and pass it to Racket's GUI library.  This
 tutorial is already too long to provide all the code to do that, but
-you can download it all from my github.  The interface is easy
-enough.  The function called `turtles-go` takes a turtle-state fun and
-applies it to an emtpy initial state, pulls out the drawing after the
-function is finished, and draws it.
+you can download it all from my [github][github-racket].  The
+interface is easy enough.  The function called `turtles-go` takes a
+turtle-state fun and applies it to an empty initial state, pulls out
+the drawing after the function is finished, and draws it.
 
 Let's practice using the turtle monad to draw something.  How about a
 regular n-gon?  A regular n-gon is defined by an edge length and a
@@ -920,7 +954,7 @@ besides Haskell.  Reasons proferred include "it is easier to use
 side-effects," "there isn't syntactic support," and "you need static
 typing."  I'm not a Haskell programmer, so I can't speak too
 authoritatively on the subject static typing, but I think that at
-least in Lisp dialects where the second argument can be easily
+least in Lisp dialects, where the second argument can be easily
 dispensed with, the first argument doesn't hold water.
 
 If you look up the Forth pages on the C2 Wiki you'll eventually come
@@ -943,7 +977,7 @@ have accomplished is the creation of a sub-langage with entirely novel
 semantics in a few tokens.  Add the `mlet*` syntax (itself about 20
 lines of syntax-case macro) and the minimal subset of `turtle`
 primitive functions, and we are suddenly looking at a
-domain-specific-langage _on steroids_.  
+domain-specific-language _on steroids_.  
 
 But this is a very simple solution!  You write a short bind and return
 function, use the already "standard" monadic syntax, and inside those

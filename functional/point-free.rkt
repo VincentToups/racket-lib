@@ -83,6 +83,20 @@
                 inds
                 vals)))))))
 
+(define (trans-nth n f lst)
+  (let loop ((n n)
+             (lst lst)
+             (past '()))
+    (cond
+     ((empty? lst) (reverse past))
+     ((= n 0) (append (reverse past) (cons (f (car lst)) (cdr lst))))
+     (else
+      (loop (- n 1) (cdr lst) (cons (car lst) past))))))
+
+(define (dec-nth f n tr)
+  (lambda args
+    (apply f (trans-nth n tr args))))
+
 (define (any-by lst pred)
   (foldl 
    (lambda (it ac)
@@ -134,9 +148,14 @@
   (lambda args
     (or (f1 args) (f2 args))))
 
+(define (f-map f)
+  (>partial map f))
+
 (provide >partial partial< dec-all 
          partial_
          compose
          f-join
          f-and
+         dec-nth
+         f-map
          f-or)
