@@ -6,7 +6,7 @@
          )
 
 
-;;; Data Types Each call to struct (defined in racket/base) creates a
+;;; Data Types: Each call to struct (defined in racket/base) creates a
 ;;; constructor, predicate, and functions to fetch and modify the
 ;;; fields.  This library never modifies structs, however.  Functions
 ;;; return new structs with the appropriate changes.  Each struct is
