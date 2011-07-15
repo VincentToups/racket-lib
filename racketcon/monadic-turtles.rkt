@@ -320,5 +320,9 @@
          jump-to
          m-turtles
          turtles-let*
+         doublet
+         doublet-a
+         doublet-b
+         doublet?
          add-line-pts)
          

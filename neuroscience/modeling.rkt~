@@ -1,0 +1,23 @@
+#lang racket
+
+(require racket/dict
+         racket/match)
+
+(struct struct:component (does does-form doc depends-on)
+  #:property
+  prop:procedure (struct-field-index does)
+  #:property
+  prop:custom-write 
+  (lambda (comp port mode)
+    (display "<does: ~s\n" (struct:component-does-form comp) port)
+    (display " doc:  ~s\n>" (struct:component-doc  comp) port)))
+
+(define-syntax (component stx)
+  (syntax-case stx ()
+    [(component (arg1 ...) body ...)
+     (syntax
+      (struct:component
+       (lambda (arg1 ...) body ...)
+       '(lambda (arg1 ...) body ...)
+    
+

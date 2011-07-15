@@ -4,19 +4,33 @@
          (for-syntax utilities/lists)
          racket/dict)
 
-(define-syntax let-if 
+(define-syntax let-if
+  ;;; (let-if name expr true-branch false-branch) Binds name to the
+  ;;; result of expression, and then, if it is also a true value,
+  ;;; executes true branch, otherwise executes false-branch, each in
+  ;;; the scope where name is bound.
   (syntax-rules ()
     [(let-if name pred true false) 
      (let ((name pred))
        (if pred true false))]))
 
-(define-syntax (mlet* stx) 
+(define-syntax (mlet* stx)
+  ;;; Monadic binding form.  (mlet* monad ((var expr) ...) body ...)
+  ;;; _monadically_ bind each expression to the variable var in
+  ;;; subsequent binding forms and in (begin body ...).
+  ;;;
+  ;;; The monad form specifies the bind operation to use, where monad
+  ;;; must evaluate to a racket dict with entries for 'bind, 'return,
+  ;;; 'plus and 'zero, although only 'bind and 'return must be functions.
   (syntax-case stx ()
     [(mlet* monad ((var exp) ...) body ...)
      (syntax 
       (with-monad monad (mlet-inner monad ((var exp) ...) body ...)))]))
 
 (define-syntax (with-monad stx)
+  ;;; Evaluate (begin body ...) in a context where current-monad,
+  ;;; m-bind, >>=, m-return, m-plus, and m-zero are defined based on
+  ;;; the values in the monad specified by the expression monad.
   (syntax-case stx ()
     [(with-monad monad body ...)
      (with-syntax ((current-monad_ (datum->syntax (syntax monad) 'current-monad))
@@ -33,6 +47,7 @@
                  body ...)))]))
 
 (define-syntax (mlet-inner stx)
+  ;;; Helper macro for mlet*.
   (syntax-case stx (non-monadically: if:)
     [(mlet-inner monad ((non-monadically: pairs)) body ...)
      (syntax (let* pairs body ...))]
@@ -57,14 +72,17 @@
 ;;   (syntax-case stx ( <- :- )
 ;;     [(monadically monad expression ...)
 
-(define (retrieve key alist) 
+(define (retrieve key alist)
+  ;;; Retrieve key from the dict in alist.
   (dict-ref alist key))
 
 (define (>partial f . pargs)
+  ;;; partially apply the args pargs to the left of f.
   (lambda args
     (apply f (append pargs args))))
 
 (define (partial< f . pargs)
+  ;;; partially apply the args pargs to the right of f.
   (lambda args
     (apply f (append args pargs))))
 
@@ -74,6 +92,8 @@
 (define plus-of (>partial retrieve 'plus))
 
 (define (alist-cons key val alist)
+  ;;; Cons the key/val pair onto alist in such a way as to avoid
+  ;;; duplicate keys.
   (let loop
       ((alist alist)
        (past (list)))
@@ -83,6 +103,9 @@
           (#t (loop (cdr alist) (cons (car alist) past))))))
 
 (define (alist>> maybe-alist . args)
+  ;;; Add the key/val pairs in args to the alist maybe-alist.  If
+  ;;; maybe-alist is not a list, create a new alist and then add the
+  ;;; pairs, including the value maybe-alist as the first key.
   (if (not (list? maybe-alist)) (apply alist>> (list) maybe-alist args)
       (foldl 
        (lambda (pair alist)
@@ -92,51 +115,65 @@
        (bunch-by args 2))))
 
 (define (fswap2 f)
+  ;;; Return a new function which swaps the order of the two arguments
+  ;;; of f.
   (lambda (a b)
     (f b a)))
 
+(define
+  m-list
+  ;;; The list or sequence monad.
+  (alist>> 'bind
+           (lambda (v f)
+             (reduce (fswap2 append) (map f v)))
+           'return list
+           'zero (list)
+           'plus append))
+
+(define
+  m-list-interleave
+  ;;; The list or sequence monad where bind interleaves elements
+  ;;; instead of concatenating the lists.
+  (alist>> 'bind 
+           (lambda (v f)
+             (reduce (fswap2 interleave) (map f v)))
+           'return list
+           'zero (list)
+           'plus interleave))
 
 
-
-
-(define m-list (alist>> 'bind 
-                        (lambda (v f)
-                          (reduce (fswap2 append) (map f v)))
-                        'return list
-                        'zero (list)
-                        'plus append))
-
-(define m-list-interleave (alist>> 'bind 
-                                   (lambda (v f)
-                                     (reduce (fswap2 interleave) (map f v)))
-                                   'return list
-                                   'zero (list)
-                                   'plus interleave))
-
-
-(define m-maybe (alist>> 'bind (lambda (v f)
-                                 (if v (f v) #f))
-                         'return (lambda (x) x)
-                         'zero #f
-                         'plus (lambda (a b) (and a b))))
+(define
+  m-maybe
+  ;;; The maybe monad.  Bind bails if any value is #f.
+  (alist>> 'bind (lambda (v f)
+                   (if v (f v) #f))
+           'return (lambda (x) x)
+           'zero #f
+           'plus (lambda (a b) (and a b))))
 
 (define (lift-left f monad)
+  ;;; Make f a monadic function in its first argument.
   (lambda (v . args)
     (mlet* monad ((v v))
            (m-return (apply f v args)))))
 
 (define (lift-nth n f monad)
+  ;;; Make f a monadic function in its nth argument.
   (lambda args
     (mlet* monad ((a (nth n args)))
            (m-return (apply f (sub-nth n a args))))))
 
 (define (lift-nth-plus n f monad)
+  ;;; Make f a monadic function in its nth argument, but assume f
+  ;;; already returns a monadic value, which needs to be combined with
+  ;;; m-plus.
   (lambda args
     (with-monad monad
                 (reduce m-plus (mlet* monad ((a (nth n args)))
                                                (m-return (apply f (sub-nth n a args))))))))
 
 (define (lift-n n f monad)
+  ;;; lift f into the monad monad by its nth argument.
   (if (= n 0) f
       (let loop ((i 1)
                  (lifted (lift-nth 0 f monad))
@@ -148,6 +185,8 @@
              (- left 1))))))
 
 (define-syntax (static-lift stx)
+  ;;; Statically lift the function f, with arity n, into the monad
+  ;;; monad.
   (syntax-case stx ()
     [(static-lift n f monad)
      (with-syntax (((binder ...) (map 
@@ -177,6 +216,7 @@
                       ((return-of monad) (f monad-arg ...))))))]))
 
 (define (add-unique item list pred)
+  ;;; cons item onto list if it isn't there already (by pred).
   (let loop ((past '())
          (list list))
     (cond ((empty? list)
@@ -187,6 +227,8 @@
            (loop (cons (car list) past) (cdr list))))))
 
 (define (append-unique it ac pred)
+  ;;; Append the two lists together in such a way that only one of
+  ;;; each element (by pred) is preserved.
   (foldl
    (lambda (item list)
      (add-unique item list pred))
@@ -194,6 +236,9 @@
    it))    
 
 (define (map-cat-unique f v pred)
+  ;;; The set monadic bind operation, needs to be partially applied
+  ;;; for pred.  Apply f to the elements in v, and collect the unique
+  ;;; output elements.
   (let ((lists (map f v)))
     (reduce 
      (lambda (it ac)
@@ -201,6 +246,7 @@
      lists)))
 
 (define (m-set pred)
+  ;;; The set monad.
   (alist>>
    'return (lambda (x) (list x))
    'bind (lambda (v f)
@@ -209,7 +255,8 @@
            (append-unique a b pred))
    'zero '()))
 
-(define m-state 
+(define m-state
+  ;;; The state monad.  
   (alist>> 
    'return (lambda (x) (lambda (state) (list x state)))
    'bind (lambda (v f)
@@ -313,6 +360,7 @@
          (m-return (+ a b))))
 
 (define (m-syntax where)
+  ;;; The syntax monad - might be useful?
   (alist>>
    'return (lambda (d)
              (datum->syntax where d))
@@ -322,6 +370,9 @@
        (f naked-value)))))
 
 (define-syntax (state-define stx)
+  ;;; Utility for defining state-functions.  Defines a function of all
+  ;;; paramters after the initial parameter, which returns a function of state.
+  ;;; Or defines a state function which returns the value specified.
   (syntax-case stx ()
     [(state-define (id state-name) body ...)
      (syntax (define (id) (lambda (state-name) body ...)))]

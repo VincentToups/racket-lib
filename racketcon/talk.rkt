@@ -10,9 +10,7 @@
  (prefix-in mts: racketcon/monadic-turtles)
  (prefix-in mt: racketcon/monadic-turtle))
 
-
-
-(slide #:title "Purely Function Turtle Graphics with Monads"
+(slide #:title "Purely Functional Turtle Graphics with Monads"
        #:layout 'center
  (mts:turtles->pict 
         (mts:turtles-let* 
@@ -335,9 +333,10 @@
 
 (slide #:title "Conclusions"
        (item "Monadic computations facilitate elegant representations of purely functional code.")
-       (item "Because were already thinking monadically, it was easy to extend our turtles with parallel operations.")
+       (item "Because we are already thinking monadically, it was easy to extend our turtles with parallel operations.")
        (item "Almost all the hard work is squeezed into getting the right bind operation.")
-       (item "All this code is available at my github: "))
+       (item "All this code is available at my github: https://github.com/VincentToups/racket-lib/tree/master/racketcon")
+       (item "Thanks to: Triangle Functional Programmers, Konrad Hinson's (Clojure Monads), Jim Duey (Monad Tutorials in Clojure)."))
 
 
        

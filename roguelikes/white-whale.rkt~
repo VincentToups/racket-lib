@@ -1,0 +1,23 @@
+#lang racket
+
+(require racket/gui)
+
+(define game-width (* 16 32))
+(define game-height (* 16 32))
+
+(define game-frame 
+  (new frame%
+       [width game-width]
+       [height game-height]
+       [label "Whale"]))
+
+(define game-canvas 
+  (new canvas 
+       [width game-width]
+       [height game-height]
+       [paint-callback 
+        (lambda (self dc)
+          (send worldview paint-onto dc))]))
+
+
+

@@ -1,0 +1,25 @@
+#lang racket
+
+(require racketcon/monadic-turtles
+         racket/match
+         (prefix-in lists: utilities/lists)
+         slideshow)
+
+(define (simple-tile->pict item)
+  (match item 
+    [#f (filled-rectangle 8 8)]
+    [x (rectangle 8 8)]))
+
+(define (chunk-row->pict c row)
+  (match c
+    [(chunk w h d r)
+     (if (>= row h) (error "Tried to render a chunk-row out of range.")
+         (foldl
+          (lambda (j row)
+            (hc-append row (r (dict-ref d (list row j) #f))))
+          (blank 0 0)
+          (lists:range w)))]))
+
+(struct chunk (width height dict tile-renderer))
+
+

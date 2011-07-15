@@ -477,6 +477,8 @@
  pass
  doublet-a
  doublet-b
+ doublet
+ doublet?
  turtles-zero
  turtles-return
  n-times-call

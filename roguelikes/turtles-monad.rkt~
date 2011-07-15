@@ -11,12 +11,9 @@
          (except-in utilities/lists any)
          racket/match
          racket/dict
-         racket/draw
-         (rename-in slideshow/pict [bitmap bitmap->pict])
+         (rename-in (only-in slideshow/pict bitmap) [bitmap bitmap->pict])
          racket/gui)
          
-(define (pair a b)
-  (cons a b))
 
 (struct doublet (a b)
         #:property
@@ -439,7 +436,7 @@
             bitmap)))
 
 (define (turtles-go->pict turtle-f . optional-arg-dict)
-  (let ((bitmap (apply turtles-go->bitmap turtles-go->bitmap optional-arg-dict)))
+  (let ((bitmap (apply turtles-go->bitmap turtle-f optional-arg-dict)))
     (bitmap->pict bitmap)))
 
 
