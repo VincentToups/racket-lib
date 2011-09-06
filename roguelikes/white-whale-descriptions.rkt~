@@ -1,0 +1,101 @@
+#lang racket
+(require roguelikes/white-whale-data3
+         utilities/proletariate)
+
+
+
+(define-multimethod (describe thing) :: (class-name thing))
+
+(define-syntax description-of
+  (syntax-rules ()
+    [(description-of symbol body ...)
+     (define-method (describe symbol) :: symbol 
+       body ...)]))
+
+
+(define (hunger-factor->description n)
+  (cond 
+   ((< n .25) "It makes me feel much less hungry.")
+   ((between n .25 .75) "It makes me feel less hungry.")
+   ((between n .75 .9999) "I feel a little less hungry than usual.")
+   ((between n .9999 1.00001) "I think I feel about the same, hunger-wise.")
+   ((between n 1.00001 1.25) "It makes me feel a little hungrier.")
+   ((between n 1.25 1.75) "It makes me feel somewhat hungrier")
+   ((between n 1.75 2.5) "It makes me a lot hungrier!")
+   ((> 2.5 n) "I can't seem to get enough food!")))
+
+(description-of forearm 
+                "I guess I can use my forearm to block blows like a spanish knife-fighter.")
+(description-of loose-paneling
+                "This is a piece of loose wall paneling.  I can use it is a kind of improvised shield.")
+(description-of bulkhead-fragment 
+                "Somehow a piece of the ship's bulkhead has been cleaved from the wall?  The material is tough but light enough to use as a shield.")
+(description-of charge-bearing
+                (format "There is in an indicator with the number of charges left.  It says ~a." (dict-ref charge-bearing 'charge)))
+(description-of energy-shield 
+                (string-append "Some kind of active force-field.  " (call-next-method)))
+(description-of medical-system 
+                (string-append "This appears to be a medical device of some kind, and it hardly provides any defense at all.  " (call-next-method)))
+(define (between n low high)
+  (and (>= n low) (<= n high)))
+
+(description-of hunger-modifying
+                (hunger-factor->description (dict-ref hunger-modifying 'hunger-factor)))
+
+(description-of defensive-symbiote
+                (string-append "This organic fluid covers my body, and is extremely tough.  " (call-next-method)))
+
+(description-of bare-hands
+                "Like most middling scrappers, I look tougher than I am and I can throw a punch, but it won't be much use against most of what is in here.")
+
+(description-of suit-gauntlet 
+                "The glove-part of my space suit.  I can at least hit with it without hurting my hand.")
+
+(description-of heavy-mechanism
+                "A long, heavy mechanism detached from some larger, mysterious machine.")
+
+(description-of memory-crystal-shard
+                "A sharp fragment of memory crystal.  I can attack with it, but it cuts my hand.")
+
+(description-of topiary-fractal 
+                "A bizarre fractal-bladed trawl which reshapes the ship around me.")
+
+(description-of energy-sword 
+                (string-append "A hot blade of energy.  "  (call-next-method)))
+
+(description-of wire-bundle
+                "A long bundle of wires.  Better range than anything else, but not strong.")
+
+(description-of electric-prod
+                "Self-charging electric prod.  Particularly good against robotic enemies.")
+
+(description-of ouija-shiv
+                "I don't know how to describe this.  It has planes and angles into spaces I can't perceive.")
+
+(description-of bullets
+                (format "A magazine of chemically propelled bullets.  There are ~n in this one." (dict-ref bullets 'count)))
+
+(description-of pulse-bullets
+                (format "A magazine of energy slugs.  There are ~n in this one." (dict-ref pulse-bullets 'count)))
+
+(description-of player
+                "I guess I'm still in one piece.")
+
+(description-of service-droid
+                "It is some kind of (mostly) mechanical robot - maybe a routine service droid of some kind?")
+
+(description-of uncanny-duplicate
+                "My god - I think... I think the ship tried copying me...  The details are indistinct, but...")
+
+(description-of menacing-presence
+                "I can just barely tell where it is.  Looking at it makes me feel sick and scared.")
+(description-of naked-singularity
+                "...Indescribably - a type 3 naked singularity.  I'd never expected to see one and I can't imagine how it manages to move.")
+(description-of industrial-robot
+                "A tremendous cybernetic behemoth, but obviously pressed into service from industrial duties.")
+(description-of combat-robot
+                "It excudes menace - looks like it decorated with some kind of distant relative of cyrillic script.")
+(description-of incisive-philosopher
+                "Can't tell if its real or artificial, but it asks such strange questions.")
+
+

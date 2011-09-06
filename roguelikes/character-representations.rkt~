@@ -1,0 +1,26 @@
+#lang racket
+(require utilities/proletariat
+         roguelikes/white-whale-data3)
+
+(define-multimethod (character o) :: (class-name o))
+
+(define-syntax character-of
+  (syntax-rules ()
+    [(character-of name body ...)
+     (define-method (character name) body ...)]))
+
+(character-of melee-weapon "/")
+(character-of shield "o")
+(character-of ammunition "=")
+(character-of food "%")
+(character-of medicine "+")
+(character-of player "@")
+(character-of monster "m")
+(character-of service-droid "t")
+(character-of uncanny-duplicate "@")
+(character-of menacing-presence ",")
+(character-of naked-singularity "*")
+(character-of industrial-robot "T")
+(character-of combat-robot "&")
+(character-of incisive-philosopher "^")
+

@@ -1,0 +1,53 @@
+#lang racket
+
+(require (for-syntax syntax/parse))
+
+(define-syntax (struct/dippers-helper stx)
+  (syntax-parse 
+   stx
+   [(_ s:id)
+    (syntax (begin))]
+   [(_ s:id x:id)
+    (with-syntax ((dipper (datum->syntax (syntax x) (string->symbol
+                                                     (string-append "dip-" 
+                                                                    (symbol->string (syntax->datum (syntax s)))
+                                                                    "-"
+                                                                    (symbol->string (syntax->datum (syntax x)))))))
+                  (setter (datum->syntax (syntax x) (string->symbol
+                                                     (string-append "set-" 
+                                                                    (symbol->string (syntax->datum (syntax s)))
+                                                                    "-"
+                                                                    (symbol->string (syntax->datum (syntax x)))))))
+                  (getter (datum->syntax (syntax x) (string->symbol
+                                                     (string-append (symbol->string (syntax->datum (syntax s))) "-" 
+                                                             (symbol->string (syntax->datum (syntax x))))))))
+      (syntax (begin 
+                (define (dipper id fun-id)
+                  (struct-copy s id [x (fun-id (getter id))]))
+                (define (setter id val)
+                  (dipper id (lambda (drop) val))))))]
+   [(_ s:id x0:id x:id ...)
+    (syntax (begin (struct/dippers-helper s x0)
+                   (struct/dippers-helper s x ...)))]))
+
+(define-syntax (struct/dippers stx)
+  (define-syntax-class field-option
+    (pattern #:mutable)
+    (pattern #:auto))
+  (define-syntax-class struct-field-desc
+    (pattern name:id)
+    (pattern [name:id opt:field-option ...]))
+  (syntax-parse 
+   stx 
+   [(_ name:id (fd:struct-field-desc ...) struct-option ...)
+    (syntax (begin (struct name (fd ...) struct-option ...)
+                   (struct/dippers-helper name fd.name ...)))]
+   [(_ name:id super:id (fd:struct-field-desc ...) struct-option ...)
+    (syntax (begin (struct name super (fd ...) struct-option ...)
+                   (struct/dippers-helper name fd.name ...)))]))
+
+(struct/dippers test (a b) #:transparent)
+(struct/dippers test-child test () #:transparent)
+(struct/dippers test-child-child test-child () #:transparent)
+                
+(provide struct/dippers)

@@ -1,0 +1,54 @@
+#lang racket
+
+(require (for-syntax syntax/parse))
+
+(define (bind v f) (f v))
+(define (return v) v)
+(define zero #f)
+(define plus #f)
+
+(struct monad (bind return zero plus) #:transparent)
+
+(define current-monad (monad bind return zero plus))
+
+(define-for-syntax (sym-append . syms)
+  (if (= 1 (length syms)) (car syms)
+      (string->symbol (foldl 
+       (lambda (it ac)
+         (string-append ac "-" (symbol->string it)))
+       (symbol->string (car syms))
+       (cdr syms)))))
+
+(define-syntax (with-monad stx)
+  (syntax-parse 
+     stx
+     [(with-monad monad-expr:expr body:expr ...)
+      (with-syntax
+       ((current-monad (datum->syntax #'monad-expr 'current-monad))
+        (bind (datum->syntax #'monad-expr 'bind))
+        (return (datum->syntax #'monad-expr 'return))
+        (zero (datum->syntax #'monad-expr 'zero))
+        (plus (datum->syntax #'monad-expr 'plus)))
+        (syntax 
+         (let* ((current-monad monad-expr)
+                (bind (monad-bind current-monad))
+                (return (monad-return current-monad))
+                (plus (monad-plus current-monad))
+                (zero (monad-zero current-monad)))
+           body ...)))]))
+
+(define-syntax (mlet* stx)
+  (syntax-parse
+   stx 
+   [(mlet* (~datum in:) monad:expr [(match-pattern0:expr expr0:expr) (match-pattern:expr expr:expr) ...] body:expr ...)
+    #'(with-monad 
+       monad
+       (bind expr0 (lambda (id) 
+                     (match id 
+                       [match-pattern0 
+                        (mlet* in: current-monad [(match-pattern expr) ...] body ...)]))))]
+   [(mlet* (~datum in:) monad:expr [] body:expr ...)
+    #'(begin body ...)]
+   [(mlet* [(match-pattern:expr expr:expr) ...] body ...)
+    #'(mlet* in: current-monad [(match-pattern expr) ...] body ...)]))
+

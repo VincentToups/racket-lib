@@ -6,11 +6,12 @@
  functional/monads
  racket/gui
  ;(except-in roguelikes/turtles-monad circle rectangle)
+ (only-in utilities/sprite-loading load-image)
  (prefix-in pg: utilities/planar-geometry)
  (prefix-in mts: racketcon/monadic-turtles)
  (prefix-in mt: racketcon/monadic-turtle))
 
-(slide #:title "Purely Function Turtle Graphics with Monads"
+(slide #:title "Purely Functional Turtle Graphics with Monads"
        #:layout 'center
  (mts:turtles->pict 
         (mts:turtles-let* 
@@ -25,12 +26,13 @@
                       (mts:turtles-return p))
                     )))
          (mts:turtles-return new-pos)))
- (t "A monad tutorial!"))
+ (t "A monad tutorial!")
+ (t "Vincent Toups"))
 
 (slide #:title "What we want to accomplish"
        (item "Understand monads.")
        (item "Use a monad to represent a purely functional turtle graphics system.")
-       (item "Justify using a monadic solution by extending the monad to add powerful new features to our system."))
+       (item "Justify this approach by extending our monad to add powerful new features to our system."))
 
 (slide #:title "Turtle Graphics Primer"
        (item "Turtle Graphics use a very clever turtle with a pen to draw pictures.")
@@ -58,23 +60,23 @@
              (subitem "Position (a pair of numbers)")
              (subitem "Heading (a single number in radians)")
              (subitem "a \"pen-down\" flag, pen color, memory, etc..."))
-       (item "Supposing we want to \"wear the hair shirt\" and simulate our turtle without side effects.  How?"))
+       (item "Supposing we want to simulate our turtle without side effects.  How?"))
 
 (current-code-font (make-object font% 12 'swiss))
 
-(slide #:title "Sewing the Hair Shirt"
+(slide #:title "Purely:"
        (item "Turtle Representation, an association list"
              (subitem (code (define (make-turtle) (list (cons 'pos (point 150 150))
                                                         (cons 'facing 0)
                                                         (cons 'pen-state 'down)))
                             )))
        (item "Each \"command\" is a function which accepts a state and returns..?")
-       (item "Well, at least a new state.")
+       (item "...at least a new state.")
        (item "We'll also let turtle functions return a value in addition to a new state.")
-       (item "That is, commands or turtle functions return a doublet of values, the first an arbitrary value and the second a new state.")
+       (item "That is, commands or turtle functions return a doublet of values, the first an arbitrary value (for subsequent commands) and the second a new state.")
        ) 
 
-(slide #:title "Useful Operations I"
+(slide #:title "Useful Operations Look Like:"
   (item (code (defstruct doublet (a b))))
   (item (code (define (move distance)
                  (lambda (turtle-state)
@@ -84,39 +86,45 @@
                                            (vector-from-dir-and-len 
                                             distance
                                             face))))
+                     (if (on-screen? new-pos)
                      (doublet 
                       new-pos
-                      (dict-set turtle-state 'pos new-pos)))))))
+                      (dict-set turtle-state 'pos new-pos))
+                     (doublet
+                      #f
+                      turtle-state)))))))
   (item (code (define (turn amount)
                 (lambda (turtle-state)
                   (let* ((face (dict-ref turtle-state 'facing))
                          (new-facing (+ facing amount)))
                     (doublet new-facing
                              (dict-set turtle-state 'facing new-facing))))))))
-(slide #:title "Useful Operations II"
+(slide #:title "Connecting Turtle Functions"
+       (item "Insert a value into a stream of turtle functions.")
   (item (code (define (turtle-return item) 
                 (lambda (turtle-state)
                   (doublet item turtle-state)))))
+  (item "Combine a turtle function with a parameterized turtle function.")
   (item (code (define (turtle-bind turtle-function
                                    turtle-function-producer)
                 (lambda (turtle-state)
                   (match (turtle-function turtle-state)
-                    [(doublet returned-val new-state)
-                     (let ((new-turtle-fun (turtle-function-producer returned-val)))
+                    [(doublet proper-return-val new-state)
+                     (let ((new-turtle-fun (turtle-function-producer proper-return-val)))
                        (new-turtle-fun new-state))]))))))
 
-(slide #:title "In the Monads of Madness"
+(slide #:title "At the Monads of Madness"
        (item "Turtle functions, along with turtle-return and turtle-bind, form a monad!")
        (item "What is a monad?")
        (item "A collection of data types which satisfy certain constraints, like:"
-             (subitem "There exist operations `bind` and `return` and types `monadic values,` `monadic-functions` and `values` for which:")
+             (subitem "There exist operations `bind` and `return` and types `monadic values,` `monadic-functions` and `values` for which (among other things):")
              (subitem (code (bind a return) -> a))
              (subitem (code (bind (return a) f) -> (f a)))
              (subitem "Where `a` is a monadic value.")
              ))
 
 (slide #:title "Yeah, but what is a monad?"
-       (item "Ok, ok - a monad is just a way of extending the idea of variable binding. Consider that:")
+       (item "Ok, ok - a monad is (at least) a way of extending the idea of variable binding. Consider that:")
        (item (code (let* ((x 10)
                           (y (+ x 11)))
                      (+ x y))))
@@ -227,7 +235,7 @@
        (item "We want to create a bind operation that handles multiple turtles, with their own state, AND a shared, global state (for the drawing).")
        (item "A good approach is to consider turtle commands.")
        (item "They should accept a pair of states, a local and global state, and return at least a possibly modified global state.")
-       (item "They also should return a list of multiple outcomes."))
+       (item "They also should return (somehow) a list of multiple outcomes."))
 
 (slide #:title "Some code"
        (item "Initial turtle state:")
@@ -248,11 +256,12 @@
                          [(doublet local-state global-state)
                           (doublet (list (doublet item local-state)) global-state)]))))))
 
-(slide #:title "Deep breath: turtles-bind"
+(slide #:title "lots of code: turtles-bind"
        (code (define (turtles-bind turtlesf turtlesf-prod)
   (lambda (state-doublet)
     (match (turtlesf state-doublet)
       [(doublet local-doublets global-state)
+       "loop fold the global-state through all the new turtle functions, producing one for each proper return value in local-doublets."
        (let loop ((local-doublets local-doublets)
                   (global-state global-state)
                   (local-doublets-out '()))
@@ -260,8 +269,9 @@
            [(list) (doublet (reduce append (reverse local-doublets-out)) global-state)]
            [(cons local-doublet local-doublets)
             (match local-doublet
-              [(doublet val local-state)
-               (let ((new-turtle-fun (turtlesf-prod val)))
+              [(doublet proper-return-val local-state)
+               (let ((new-turtle-fun (turtlesf-prod proper-return-val)))
+                 "Apply the new function, accumulating the local and global parts."
                  (match (new-turtle-fun (doublet local-state global-state))
                    [(doublet sub-local-doublets
                              global-state)
@@ -319,7 +329,11 @@
                                                  (point 225 75)
                                                  (point 225 225)
                                                  (point 75 225)))
-                                 (final-pos (spiraling-shape 40 1.1)))
+                                 (eccentricity (if (= (point-x pos)
+                                                      (point-y pos))
+                                                   (turtles-return 1.1)
+                                                   (turtles-return 0.9)))
+                                 (final-pos (spiraling-shape eccentricity 1.1)))
                                 (turtles-return final-pos))))))
        (item (mts:turtles->pict 
               (mts:turtles-let* 
@@ -328,15 +342,23 @@
                                     (pg:point 225 75)
                                     (pg:point 225 225)
                                     (pg:point 75 225)))
-                (final-pos (spiraling-shape 40 1.1)))
+                (eccentricity (if (= (pg:point-x pos)
+                                     (pg:point-y pos))
+                                  (mts:turtles-return 1.1)
+                                  (mts:turtles-return 0.9)))
+                (final-pos (spiraling-shape 40 eccentricity)))
                (mts:turtles-return final-pos)))))
 
 (slide #:title "Conclusions"
-       (item "Monadic computations facilitate elegant representations of purely functional code.")
-       (item "Because were already thinking monadically, it was easy to extend our turtles with parallel operations.")
+       (item "Monadic computations facilitate elegant representations of purely functional code by extending the notion of variable binding.")
+       (item "Because we are already thinking monadically, it was easy to extend our turtles with parallel operations.")
        (item "Almost all the hard work is squeezed into getting the right bind operation.")
        (item "All this code is available at my github: https://github.com/VincentToups/racket-lib/tree/master/racketcon")
-       (item "Thanks to: Triangle Functional Programmers, Konrad Hinson's (Clojure Monads), Jim Duey (Monad Tutorials in Clojure)."))
+       (item "Check my blog for a screencast version (and other Scheme/Lisp/Programming related content: dorophone.blogspot.com"))
+
+(slide #:title "Thanks/Future:"
+       (item "Typed racket for genealized monadic binding expressions?")
+       (item "Thanks: Triangle Functional Programmers, Konrad Hinson's (Clojure Monads), Jim Duey (Monad Tutorials in Clojure)."))
 
 
        

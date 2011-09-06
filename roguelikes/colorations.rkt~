@@ -1,0 +1,25 @@
+#lang racket
+(require utilities/proletariat
+         (prefix-in gui: racket/gui)
+         (only-in racket/draw color%)
+         roguelikes/white-whale-data3)
+
+(define-multimethod (coloration o) :: (class-name o))
+
+(define-syntax coloration-of 
+  (syntax-rules ()
+    [(_ symbol body ...)
+     (define-method (coloration symbol) :: symbol body ...)]))
+
+(coloration-of thing "black")
+
+(coloration-of 
+ player 
+ (match player
+   [(hash-table 
+     ('health 
+      (hash-table 
+       ('value val)
+       ('max mx) (k v) ...)) (q r) ...)
+    (let ((proportion (inexact->exact (* 255 (/ val mx)))))
+      (make-object color% (- 255 proportion) 0 proportion))]))

@@ -1,0 +1,51 @@
+#lang racket
+
+(require utilities/proletariat)
+
+(define/class grid (object) 'keys '() 'data '())
+
+(define-method (at grid pos) :: #(grid list)
+  (match grid 
+    [(hash-table grid ('data data))
+     (dict-ref data pos #f)]))
+
+(define (pos< p1 p2)
+  (match (list p1 p2)
+    [(list
+      (list (? number? i1)
+            (? number? j1))
+      (list (? number? i2)
+            (? number? j2)))
+     (if (= i1 i2) (< j1 j2)
+         (< i1 i2))]))
+
+(define (pos-cons p pl . acc)
+  (match acc 
+    [(list) (pos-cons p pl '())]
+    [(list acc)
+     (match pl
+       [(list) (reverse (cons p acc))]
+       [(cons h rest)
+        (cond 
+          ((pos< p h) (append (reverse (cons p acc)) pl))
+          ((equal? p h) (append (reverse acc) pl))
+          (else (pos-cons p rest (cons h acc))))])]))
+
+(define-multimethod (set-at gr p val) :: (vector-immutable (class-name gr) (class-name p)))
+(define-method (set-at gr p val) :: #(grid list)
+  (adjust gr 'data 
+          (depending-on (data) (dict-set data p val))
+          'keys (depending-on (keys) (pos-cons p keys))))
+                              
+(define-multimethod (dip-at gr p dip) :: (vector-immutable (class-name gr) (class-name p)))
+(define-method (dip-at gr p dip) :: #(grid list)
+  (adjust gr 'data 
+          (depending-on (data) 
+                        (let ((element (dict-ref data p #f)))
+                          (dict-set data p (dip element))))
+          'keys (depending-on (keys) (pos-cons p keys))))
+
+
+  
+    
+  

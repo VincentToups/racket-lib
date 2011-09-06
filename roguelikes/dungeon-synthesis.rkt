@@ -4,6 +4,7 @@
          racket/match
          (prefix-in lists: utilities/lists)
          (prefix-in pf: functional/point-free)
+         (prefix-in m:  functional/monads)
          (prefix-in pg: utilities/planar-geometry)
          slideshow)
 
@@ -17,6 +18,56 @@
       [0  (write c port)]
       [1  (write c port)])))
 
+(struct wall (properties))
+(struct floor (properties things entities))
+(struct fluid (properties things entities depth))
+(struct staircase (properties direction))
+(struct weapon (properties type attack))
+(struct shield (properties type defense))
+(struct food (properties type amount))
+(struct scroll (properties type))
+(struct medicine (properties type amount))
+
+(define (thing->text thing)
+  (match thing
+    [(weapon properties type attack)
+     "/"]
+    [(shield properties type defense)
+     "O"]
+    [(food properties type amount)
+     "="]
+    [(scroll properties type)
+     "}"]
+    [(medicine properties type)
+     "+"]))
+
+(define (location->text l)
+  (match l
+    [(wall p) "#"]
+    [(floor p things e)
+     (if (empty? things) " "
+         (thing->text (car things)))]
+    [(fluid p t e d) "~"]
+    [(staircase p d) 
+     (match d
+       ['up ">"]
+       ['down "<"])]))
+
+(define (location->pict thing)
+  
+
+(define (chunk-at c . args)
+  (match args
+    [(list i j)
+     (match c
+       [(chunk w h d r)
+        (if (and (< i w)
+                 (< j h))
+            (dict-ref d (list i j) #f)
+            'out-of-bounds)])]
+    [(list (pg:point i j))
+           (chunk-at c i j)]))
+
 (define (simple-tile->pict item #:mode [mode 'pict])
   (match mode 
     ['pict
@@ -27,9 +78,9 @@
        [(cons x rest) (rectangle 8 8)])]
     ['text
      (match item
+       [(list) " "]
        [#f "X"]
        [#t " "]
-       ['() " "]
        [(cons '/ rest) "/"]
        [(cons 'o rest) "o"]
        [(cons '\{ rest) "{"]
@@ -43,7 +94,7 @@
      (if (>= row h) (error "Tried to render a chunk-row out of range.")
          (foldl
           (lambda (j row-image)
-            (hc-append row-image (r (dict-ref d (list row j) #f))))
+            (hc-append row-image (r (dict-ref d (list j row) #f))))
           (blank 0 0)
           (lists:range w)))]))
 
@@ -62,7 +113,7 @@
      (if (>= row h) (error "Tried to render a chunk-row out of range.")
          (foldl
           (lambda (j row-image)
-            (string-append row-image (r (dict-ref d (list row j) #f) #:mode 'text)))
+            (string-append row-image (r (dict-ref d (list j row) #f) #:mode 'text)))
           ""
           (lists:range w)))]))
 
@@ -84,7 +135,7 @@
          (let* ((at (dict-ref d (list i j) '()))
                 (at (if at at '())))
            (chunk w h (dict-set d (list i j) (f at)) r))
-         (error "Chunk access out of range."))]))
+         (error "dip-location" "chunk access at ~a out of range (~a)" (list i j) (list 'range: w h)))]))
 
 
 
@@ -93,7 +144,7 @@
           'south 'south-west 'west 'north-west))
 
 (define (vector-ref-modulo v i)
-  (vector-ref (modulo i (length v))))
+  (vector-ref v (modulo i (vector-length v))))
 
 (define (dir->vector dir)
   (match dir
@@ -149,6 +200,24 @@
     [(? pg:point?)
      (clockwise-from (vector->dir dir))]))
 
+(define (positive-integer? n)
+  (and (integer? n)
+       (positive? n)))
+
+(define (counter-clockwise-from-n start n)
+  (match (modulo n 8)
+    [0 start]
+    [(? positive-integer? n)
+     (counter-clockwise-from-n (clockwise-from start) (- n 1))]))
+
+(define (clockwise-from-n start n)
+  (match (modulo n 8)
+    [0 start]
+    [(? positive-integer? n)
+     (clockwise-from-n (clockwise-from start) (- n 1))]))
+
+
+
 (define (face dir)
   (set-local 'facing 
              (match dir
@@ -191,6 +260,43 @@
                                (if v v
                                    '()))))))
 
+(define (carve-point pt)
+  (turtles-let*
+   ((chunk (get-global 'chunk)))
+   (set-global
+    'chunk 
+    (dip-location chunk
+                  (pg:point-x pt)
+                  (pg:point-y pt)
+                  (lambda (v)
+                    (if v v
+                        '()))))))
+
+(define (carve-points lst)
+  (match lst
+    [(list) #f]
+    [(cons pt 
+           (list))
+     (carve-point pt)]
+    [(cons pt pts)
+     (turtles-let*
+      ((_ (carve-point pt)))
+      (carve-points pts))]))
+
+(define (carve-rectangle r)
+  (match-let* 
+    ([(pg:rectangle p1 p2) r]
+     [(pg:point x1 y1) p1]
+     [(pg:point x2 y2) p2]
+     [(list x1 x2) (sort (list x1 x2) <)]
+     [(list y1 y2) (sort (list y1 y2) <)])
+    (carve-points 
+     (m:mlet* m:m-list 
+             ((x (lists:range x1 (+ 1 x2)))
+              (y (lists:range y1 (+ 1 y2))))
+             (list (pg:point x y))))))
+  
+     
 (define (place-thing thing)
   (turtles-let* 
    ((pos (get-local 'pos (pg:point 0 0)))
@@ -213,10 +319,75 @@
    (match (turn-direction-conjugate he how)
      ['clockwise 
       (set-local 'facing 
-                 (clockwise-from face n))]
+                 (clockwise-from-n face n))]
      ['counter-clockwise
       (set-local 'facing
-                 (counter-clockwise-from face n))])))
+                 (counter-clockwise-from-n face n))])))
+
+(define (cturn)
+  (turn 'up 2))
+
+(define (point-in-chunk? p c)
+  (match-let
+      ([(pg:point i j) p]
+       [(chunk w h d r) c])
+    (and (>= i 0)
+         (>= j 0)
+         (< i w)
+         (< j h))))
+ 
+(define (default-step-action p1 p2)
+  (carve-point p2))
+
+(define (default-step-fail-action p1 p2)
+  (turtles-return p1))
+
+
+(define (step . args)
+  (match args
+    [(list) 
+     (m:mlet* m-turtles
+      ((p (get-local 'pos (pg:point 15 15)))
+       (f (get-local 'facing 'north))
+       (c (get-global 'chunk))
+       (non-monadically:
+        ((tentatively (pg:point+ p (dir->vector f))))))
+      (if (point-in-chunk? tentatively c)
+          (m:mlet* m-turtles
+                   ((np (set-local 'pos tentatively))
+                    (a  (get-local 'step-action default-step-action)))
+                   (a p np))
+          (m:mlet* m-turtles
+                   ((a (get-local 'step-fail-action default-step-fail-action)))
+                   (a p tentatively))))]
+    [(list 1) (step)]
+    [(list n)
+     (turtles-let*
+      ((p (step)))
+      (step (- n 1)))]))
+
+(define (peak-at . args)
+  (match args
+    [(list)
+     (turtles-let* 
+      ((p (get-local 'pos (pg:point 15 15)))
+       (f (get-local 'facing 'north)))
+      (peak (pg:point+ p (dir->vector f))))]
+    [(list pt)
+     (turtles-let* 
+      ((chunk (get-global 'chunk)))
+      (turtles-return 
+       (chunk-at chunk pt)))]))
+
+(define (peak . args)
+  (match args
+    [(list) (peak-at)]
+    [(list n)
+     (turtles-let* 
+      ((p (get-local 'pos))
+       (f (get-local 'facing))
+       (p (pg:point+ p (pg:point-scale (dir->vector f) n))))
+      (peak-at p))]))
 
 (define (turtles->chunk f size)
   (let* ((out (f (make-turtles))))
@@ -226,9 +397,11 @@
 
 
 
+
+
 (define test-chunk (chunk 60 30 (make-immutable-hash (list (cons (list 10 10) #t))) simple-tile->pict))
 
-(turtles->chunk (place-thing '/) 'x)
+
 
 
 
