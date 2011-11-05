@@ -49,8 +49,6 @@
    (cmd <- get-command)
    (io-return (read-command cmd))))
 
-
-
 (define dispatch
   (do-io
    (c <- symbolic-command)
