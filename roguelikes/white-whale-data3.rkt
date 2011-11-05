@@ -35,6 +35,7 @@
 (define/class tile (object) 'things '() 'entities '())
 (define/class floor (tile))
 (define/class wall (opaque tile))
+(define/class hall (floor))
 (define/class fluid (tile) 'depth 7)
 (define/class water (fluid))
 (define/class lava (fluid))

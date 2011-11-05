@@ -189,6 +189,9 @@
   (lambda args
     (or (f1 args) (f2 args))))
 
+(define (f-not f)
+  (lambda args (not (apply f args))))
+
 (define (f-map f)
   ;;; Return a new function which maps f over a list.
   (>partial map f))
@@ -199,5 +202,6 @@
          f-join
          f-and
          dec-nth
+         f-not
          f-map
          f-or)

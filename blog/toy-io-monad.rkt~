@@ -1,0 +1,20 @@
+#lang racket
+
+(require blog/toy-io)
+
+(define (io-bind io-action io-action-producer)
+  (lambda (io)
+    (let* ((result (io-action io))
+           (next-io-action
+            (io-action-producer result)))
+      (next-io-action io))))
+
+(define (io-return value)
+  (lambda (io)
+    value))
+
+(define exit-flagger 
+  (io-bind get-command 
+           (lambda (command)
+             (if (equal? command "exit") (io-return 'exit-detected)
+                 exit-flagger))))

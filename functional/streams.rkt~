@@ -1,0 +1,263 @@
+#lang racket
+
+(require functional/point-free
+         functional/better-monads)
+
+(struct empty-stream () #:transparent) 
+(define the-empty-stream (delay the-empty-stream))
+(define (stream-empty? s)
+  (cond 
+    ((equal? s the-empty-stream) #t)
+    ((stream? s) #f)))
+   
+(struct stream (head tail-promise) #:transparent)
+
+(let ((proper-stream? stream?))
+  (set!
+   stream?
+   (lambda (s)
+     (or (stream-empty? s)
+         (proper-stream? s)))))
+
+(define (stream-tail s)
+  (match s
+    [(stream hd (quote the-empty-stream)) the-empty-stream]
+    [(stream hd (? promise? tail)) (force tail)]
+    [(? (partial< equal? the-empty-stream)) (error "Can't take the tail of an empty stream.")]))
+
+(let ((literal-stream-head stream-head))
+  (set! stream-head 
+        (lambda (s)
+          (match s
+            [(stream h tl) h]
+            [(? (partial< equal? the-empty-stream))
+             (error "Can't take the head of the empty stream.")]))))
+
+(define-syntax stream-cons 
+  (syntax-rules ()
+    [(stream-cons hd tail)
+     (stream hd (delay tail))]
+    [(stream-cons hd)
+     (stream hd the-empty-stream)]))
+
+(define ones (stream-cons 1 ones))
+(define zeros (stream-cons 0 zeros))
+(define (stream-from n) 
+  (stream-cons n (stream-from (+ n 1))))
+
+(define (stream-down-from n)
+  (stream-cons n (stream-down-from (- n 1))))
+
+(define (stream-range . args)
+  (match args 
+    [(list start (? positive? incr) terminal)
+     (if (>= start terminal)
+         the-empty-stream
+         (stream-cons start
+                      (stream-range (+ start incr) incr terminal)))]
+    [(list start (? negative? incr) terminal)
+     (if (<= start terminal)
+         the-empty-stream
+         (stream-cons start
+                      (stream-range (+ start incr) incr terminal)))]
+    [(list terminal)
+     (stream-range 0 1 terminal)]
+    [(list start terminal)
+     (stream-range start 1 terminal)]))
+
+(define (take s n)
+  (let loop [(acc '())
+             (s s)
+             (n n)]
+    (if (= n 0) (reverse acc)
+        (match s
+          [(? (partial< equal? the-empty-stream)) (reverse acc)]
+          [(stream hd promise)
+           (loop (cons hd acc)
+                 (force promise)
+                 (- n 1))]))))
+
+(define (stream-map1 f s)
+  (match s
+    [(? stream-empty?) s]
+    [(stream hd tl)
+     (stream-cons (f hd)
+                  (stream-map1 f (stream-tail s)))]))
+
+(define (any-stream-empty? list-of-streams)
+  (match list-of-streams
+    [(list) #f]
+    [(cons (? stream-empty?) rest) #t]
+    [(cons (? (lambda (x)
+                (not (stream-empty? x)))) rest)
+     (any-stream-empty? rest)]))
+
+(define (stream-map f . streams)
+  (if (any-stream-empty? streams) the-empty-stream
+      (let ((heads (map stream-head streams))
+            (tails (map stream-tail streams)))
+        (stream-cons
+         (apply f heads)
+         (apply stream-map f tails)))))
+  
+
+(define (stream-append stream1 stream2)
+  (match stream1
+    [(? stream-empty?) stream2]
+    [(stream hd (? stream-empty?)) (stream-cons hd
+                                           stream2)]
+    [(stream hd pr)
+     (stream-cons 
+      hd 
+      (stream-append (stream-tail stream1) stream2))]))
+
+(define (stream-interleave s1 s2)
+  (match s1
+    [(? promise?) (stream-interleave (force s1) s2)]
+    [(? stream-empty?)
+     (if (promise? s2) (force s2) s2)]
+    [(stream hd1 (? stream-empty?))
+     (match s2
+       [(? promise?) (stream hd1 s2)]
+       [(? stream) (stream-cons hd1 s2)])]
+    [(stream hd1 pr1)
+     (match s2
+       [(? promise?) (stream-cons hd1
+                             (stream-interleave (force s2) pr1))]
+       [(stream hd2 (? stream-empty?))
+        (stream-cons hd1 (stream hd2 pr1))]
+       [(stream hd2 pr2)
+        (stream-cons 
+         hd1 
+         (stream-cons
+          hd2
+          (stream-interleave (force pr1) pr2)))])]))
+     
+(define (stream-add-tail stream1 tail-promise)
+  (match stream1
+    [(? stream-empty?) (force tail-promise)]
+    [(stream hd (? stream-empty?))
+     (stream hd tail-promise)]
+    [(stream hd tail)
+     (stream-cons hd
+                  (stream-add-tail (force tail) tail-promise))]))
+
+
+
+(define (stream-map-cat f s)
+  (match s
+    [(? stream-empty?) s]
+    [(stream hd pr)
+     (stream-add-tail  
+      (f hd) (delay (stream-map-cat f (force pr))))]))
+
+(define (stream-map-interleave f s)
+  (match s
+    [(? stream-empty?) s]
+    [(stream hd pr)
+     (stream-interleave 
+      (f hd)
+      (delay (stream-map-interleave f (force pr))))]))
+
+(define (stream-bind s f)
+  (stream-map-cat f s))
+
+(define (stream-bind* s f)
+  (stream-map-interleave f s))
+
+(define (stream-return s)
+  (stream-cons s))
+
+(define the-stream-monad
+  (monad stream-bind stream-return the-empty-stream stream-append))
+
+(define the-stream-monad*
+  (monad stream-bind* stream-return the-empty-stream stream-interleave))
+
+(define (list->cycle-helper cur whole)
+  (if (empty? cur) (list->cycle-helper whole whole)
+      (stream-cons (car cur)
+                   (list->cycle-helper (cdr cur) whole))))
+
+(define (list->stream lst)
+  (match lst
+    [(list) the-empty-stream]
+    [(cons hd tl)
+     (stream-cons hd (list->stream tl))]))
+
+(define (list->cycle lst)
+  (list->cycle-helper lst lst))
+
+(define (stream-of value)
+  (stream-cons value 
+               (stream-of value)))
+
+(define (mod32 x) (modulo x 4294967295))
+
+(define (stream-of-random-ints z w)
+  (let ((new-z (mod32 (arithmetic-shift (+ (* 36969 (bitwise-and z 65535)) (arithmetic-shift z -16)) 16)))
+        (new-w (mod32 (+ (* 18000 (bitwise-and w 65535)) (arithmetic-shift w -16)))))
+    (stream-cons (mod32 (+ (mod32 z) (mod32 w)))
+                 (stream-of-random-ints new-z new-w))))
+
+(define (stream-of-random-floats z w)
+  (stream-map 
+   (lambda (n)
+     (* (+ n 1) 2.328306435454494e-10))
+   (stream-of-random-ints z w)))
+
+(define (stream-of-pairs-of-ints . args)
+  (match args
+    [(list z1 w1 z2 w2)
+     (let ((s1 (stream-of-random-ints z1 w1))
+           (s2 (stream-of-random-ints z2 w2)))
+       (stream-zip s1 s2))]
+    [(list z1 w1)
+     (let* ((s1 (stream-of-random-ints z1 w1))
+           (s2 (stream-tail s1)))
+       (stream-zip s1 s2))]))
+
+(define (stream-zip . s)
+  (apply stream-map list s))
+
+(define (stream-of-normals z w)
+  (stream-map
+   (lambda (u1 u2)
+     (let ((r (sqrt (* -2 (log u1))))
+           (theta (* pi 2 u2)))
+       (* r (cos theta))))
+   (stream-of-random-floats z w)
+    (stream-tail (stream-of-random-floats z w))))
+
+(provide
+ the-empty-stream
+ stream-empty?
+ stream-cons
+ stream
+ stream-head
+ stream-tail
+ stream-cons
+ ones 
+ zeros
+ stream-from
+ stream-down-from
+ stream-range
+ take
+ stream-map
+ stream-append
+ stream-interleave
+ stream-add-tail
+ stream-map-cat
+ stream-map-interleave
+ stream-bind
+ stream-bind
+ stream-return
+ the-stream-monad
+ the-stream-monad*
+ list->cycle
+ stream-of
+ stream-of-random-ints
+ stream-of-random-floats
+ stream-of-pairs-of-ints
+ stream-zip
+ stream-of-normals)

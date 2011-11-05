@@ -1,0 +1,64 @@
+#lang racket
+
+(require racket/gui)
+
+(define command-input% 
+  (class text%
+    (init-field [command-callback (lambda (command) #t)])
+    (define/public (text-substring start len)
+      (let loop ((acc '())
+                 (i 0))
+        (if (< i len) (loop (cons (send this get-character (+ start i)) acc) (+ i 1))
+            (list->string (reverse acc)))))
+    (define/augment (after-insert start len)
+      (let ((string (send this text-substring start len)))
+        (if (string-contains-newline? string) 
+            (let ((command (send this text-substring 2 (+ start len))))
+              (command-callback command)
+              (send this erase)
+              (send this insert "> "))
+            #f)))
+    (super-new)))
+
+(define (string-contains-newline? str)
+  (let loop 
+    ((chars (string->list str)))
+    (cond
+      ((empty? chars) #f)
+      ((equal? (first chars) #\newline) #t)
+      (#t (loop (rest chars))))))
+
+(define (make-command/respond-window label command-handler)
+  (let* [(frame (new frame% [width 640]
+                            [height 480]
+                            [label label]))
+         (pane (new vertical-pane% 
+                    [min-height 480]
+                    [min-width 480]
+                    [parent frame]))
+         (output-text (new text%))
+         (output-editor (new editor-canvas% 
+                           [parent pane]
+                           [style (list 'no-hscroll)]
+                           [editor output-text]
+                           [label "Output:"]
+                           [min-width 640]
+                           [min-height 480]))
+         (input-text (new command-input% [command-callback command-handler]))
+         (command-region (new editor-canvas%  
+                              [parent pane]
+                              [style (list 'no-hscroll)]
+                              [editor input-text]
+                              [min-width 640]
+                              [min-height 40]
+                              [stretchable-height 40]
+                              ))
+         (output (match-lambda 
+                   ['clear (send output-text erase)]
+                   [(? string? x) (send output-text insert x)]))]
+    (send frame show #t)
+    (send input-text insert "> ")
+    (send output-text insert "Output: ")
+    output))
+
+(provide make-command/respond-window)

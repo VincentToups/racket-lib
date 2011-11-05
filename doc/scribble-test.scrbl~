@@ -1,0 +1,4 @@
+#lang scribble/base 
+
+(title #:tag "how-to"
+       "How to Design " (italic "Great") " Programs")

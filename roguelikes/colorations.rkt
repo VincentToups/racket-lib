@@ -62,12 +62,12 @@
              
 (background-coloration-of 
  lava
- (with-slots water (depth)
+ (with-slots lava (depth)
              (make-object color% (+ 50 (inexact->exact (* 175 (/ depth 7)))) 25 0)))
  
 (background-coloration-of 
  poison
- (with-slots water (depth)
+ (with-slots poison (depth)
              (make-object color% 0 (+ 50 (inexact->exact (* 175 (/ depth 7)))) 25)))
 
 

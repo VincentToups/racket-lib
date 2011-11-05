@@ -92,9 +92,60 @@
    [(mlet* (~datum in:) monad:expr [] body:expr ...)
     #'(with-monad/location monad monad body ...)]
    [(mlet* [general-binder:general-binder ...] body:expr ...)
-    #'(mlet* in: current-monad [general-binder ...] body ...)]))
+    (with-syntax ((current-monad (datum->syntax 
+                                  #'(general-binder ...)
+                                  'current-monad)))
+    #'(mlet* in: current-monad [general-binder ...] body ...))]))
 
-
+(define-syntax (monadic-do stx)
+  (define-syntax-class binding 
+    (pattern (pattern:expr (~datum <-) value:expr)))
+  (define-syntax-class letting
+    (pattern (pattern:expr (~datum is:) value:expr)))
+  (define-syntax-class binding/letting/expr
+    (pattern b:binding)
+    (pattern l:letting)
+    (pattern e:expr))
+  (syntax-parse
+   stx
+   [(monadic-do (~datum in:) monad:expr
+                b:binding
+                rest:binding/letting/expr ...+)
+    #'(let ((monad-id monad)
+            (binding-case #t))
+        (with-monad/location
+         monad-id b
+         ((monad-bind monad-id)
+          b.value
+          (lambda (id)
+            (match id
+              [b.pattern 
+               (monadic-do in: monad-id rest ...)])))))]
+   [(monadic-do (~datum in:) monad:expr
+                l:letting
+                rest:binding/letting/expr ...+)
+    #'(match l.value
+        [l.pattern
+         'letting-case
+         (monadic-do in: monad rest ...)])]
+   [(monadic-do (~datum in:) monad:expr
+                e:expr
+                rest:binding/letting/expr ...+)
+    #'(let ((monad-id monad)
+            (expression-case+ #t))
+        (with-monad/location
+         monad-id b
+         ((monad-bind monad-id)
+          e
+          (lambda (id)
+            (monadic-do in: monad-id rest ...)))))]
+   [(monadic-do (~datum in:) monad:expr
+                e:expr)
+    #'(with-monad/location monad e 'expression-case e)]
+   [(monadic-do e:expr ...)
+    (with-syntax ((current-monad 
+                   (datum->syntax #'(e ...) 'current-monad)))
+    #'(monadic-do in: current-monad e ...))]))
 
 (define (list-bind v f) 
   (let loop ([acc '()]
@@ -130,12 +181,16 @@
   (match thing
     [(? procedure?) thing]
     [(? state-doublet? doublet) (lambda (state) doublet)]
+    [(? state-error? error) (lambda (state) error)]
+    [(? state-fail? fail) (lambda (state) fail)]
     [value (lambda (state) (state-doublet value state))]))
 
 (define (state-promote-producer thing)
   (match thing
     [(? procedure?) thing]
     [(? state-doublet? doublet) (lambda (_) (lambda (state) doublet))]
+    [(? state-error? error) (lambda (_) (lambda (state) error))]
+    [(? state-fail? fail) (lambda (_) (lambda (state) fail))]
     [value (lambda (_) (state-return value))]))
 
 (define (state-bind state-funish state-fun<proper>ish)
@@ -290,12 +345,133 @@
 
 (define the-syntax-monad (monad syntax-bind syntax-return #f #f))
 
+(define (zip . lists)
+  (apply map list lists))
+
+(define (mapm monad f . lists-of-vals)
+  (let loop ((acc '())
+             (vals (apply zip lists-of-vals)))
+    (match vals 
+      [(list) ((monad-return monad) (reverse acc))]
+      [(cons hd tl)
+       (mlet* in: monad
+              ((v (apply f hd)))
+              (loop (cons v acc)
+                    tl))])))
+
+(define (seqm monad f . list-of-vals)
+  (let loop ((vals (apply zip list-of-vals)))
+    (match vals
+      [(list) ((monad-return monad) #t)]
+      [(cons hd tl)
+       (mlet* in: monad
+              ((v (apply f hd)))
+              (loop tl))])))
+    
+  
+(define (foldlm monad f init list)
+  (match list
+    [(list) ((monad-return monad) init)]
+    [(cons hd tl)
+     (mlet* in: monad
+            ((v (f hd init)))
+            (foldlm monad f v tl))]))
+
+(define (reducem monad f list)
+  (foldlm monad f (car list) (cdr list)))
+
+(define (positive-integer? n)
+  (and (integer? n)
+       (> n 0)))
+
+(define (repeat-n-accm monad f n)
+  (let loop ((n n)
+             (acc '()))
+    (match n
+      [0 ((monad-return monad) (reverse acc))]
+      [(? positive-integer?) 
+       (monadic-do in: monad
+                   (result <- (f))
+                   (loop (- n 1) (cons result acc)))])))
+
+(define (repeat-nm monad f n)
+  (let loop ((n n))
+    (match n
+      [0 ((monad-return monad) #f)]
+      [(? positive-integer?) 
+       (monadic-do in: monad
+                   (result <- (f))
+                   (loop (- n 1)))])))
+
+(define (repeat-whilem monad fdo fpred)
+  (monadic-do 
+   in: monad
+   (sentinal <- (fpred))
+   (if sentinal
+       (monadic-do
+        in: monad
+        (fdo)
+        (repeat-whilem fdo fpred))
+       ((monad-return monad) #f))))
+
+(define (repeat-while-accm fdo fpred)
+  (let loop ((acc '()))
+    (monadic-do
+     in: monad
+     (sentinal <- (fpred))
+     (if sentinal 
+         (monadic-do
+          in: monad
+          (r <- (fdo))
+          (loop (cons r acc)))
+         ((monad-return monad) (reverse acc))))))
+
+
+(define-syntax (orm stx)
+  (syntax-parse 
+   stx
+   [(orm (~datum in:) monad:expr e:expr)
+    #'(with-monad/location monad monad e)]
+   [(orm (~datum in:) monad:expr e0:expr e:expr ...+)
+    #'(let ((monad_ monad))
+        (with-monad/location 
+         monad_ monad 
+         ((monad-bind monad_) e0
+          (lambda (id)
+            (if id ((monad-return monad_) id)
+                (orm in: monad_ e ...))))))]
+   [(orm e:expr ...)
+    (with-syntax ((current-monad-id (datum->syntax #'(e ...) 'current-monad)))
+      #'(orm in: current-monad-id e ...))]))
+
+(define-syntax (andm stx)
+  (syntax-parse 
+   stx
+   [(andm (~datum in:) monad:expr e:expr)
+    #'(with-monad/location monad monad e)]
+   [(andm (~datum in:) monad:expr e0:expr e:expr ...+)
+    #'(let ((monad_ monad))
+        (with-monad/location 
+         monad_ monad 
+         ((monad-bind monad_) e0
+          (lambda (id)
+            (if id 
+                (andm in: monad_ e ...)
+                ((monad-return monad_) id))))))]
+   [(andm e:expr ...)
+    (with-syntax ((current-monad-id (datum->syntax #'(e ...) 'current-monad)))
+      #'(andm in: current-monad-id e ...))]))
+    
+      
+
+
 (provide mlet* with-monad the-identity-monad the-list-monad the-state-monad state-doublet
          monad monad? monad-bind monad-return monad-plus monad-zero
          list-bind list-return state-bind state-return 
          state-plus state-zero list-plus list-zero
          state-error state-error? state-error-message state-error-last-state state-fail state-fail?
-         static-lift the-syntax-monad<stx> lift the-syntax-monad 
+         static-lift the-syntax-monad<stx> lift the-syntax-monad mapm seqm foldlm monadic-do reducem
+         repeat-n-accm repeat-whilem repeat-while-accm orm andm
          lift1 
          lift2 
          lift3 

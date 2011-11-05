@@ -1,0 +1,67 @@
+#lang scribble/manual 
+
+@(require (for-label racket))
+
+@title{Streams}
+
+@defmodule{functional/streams}
+
+This library provides support for lazy lists, aka "streams".
+It provides the basic functions you need to construct streams
+and a monad advanced stream comprehensions.
+
+@section{Usage}
+
+This is how we do it:
+
+@subsection{Basics}
+
+A stream is a data structure which is either the empty stream,
+@racket[the-empty-stream], or a @racket[stream] structure,
+which is a pair with a head, a value of any kind, and a tail,
+which is a Racket @racket[promise], produced with the 
+@racket[delay] form.  @racket[Delay] results in a promise,
+which is basically just a thing which will evaluate into
+a value, later, when you call @racket[force].  But the point
+of building streams is so you don't have to think about this stuff.
+
+You create a stream with @racket[stream-cons].
+
+@racketblock[
+             (require functional/streams)
+             (define one (stream-cons 1 the-empty-stream))
+             ]
+
+This is a stream with just the value @racket[1] in it.  So:
+
+@racketblock[
+             (stream-head one)]
+
+Will be one.
+
+@racketblock[
+             (stream-tail one)
+             ]
+             
+Will be the empty stream.  Incidentally, the empty stream 
+is itself a promise that produces the empty stream.
+
+More interesting streams can be built with @racket[stream-cons]:
+
+@racketblock[
+             (define ones (stream-cons 1 ones))
+             ]
+
+This produces an infinitely long stream of the value 1.
+
+@racketblock[
+             (stream-head ones)
+             (stream-head (stream-tail ones))
+             (stream-head (stream-tail (stream-tail ones)))
+             ...]
+
+All evaluate to one.  How does this work?
+
+@racket[Stream-cons] is a special form, rather than a function.
+It quotes 
+             

@@ -47,7 +47,7 @@
       (if (< i i-max)
           (begin 
             (let j-loop ([j j])
-              (display (format "(~a ~a | ~a ~a)~n" i-max j-max i j))
+              ;(display (format "(~a ~a | ~a ~a)~n" i-max j-max i j))
               (if (< j j-max)
                   (let ([tile (at grid (list i j))])
                     (if tile 
@@ -58,14 +58,6 @@
             (i-loop (+ i 1)))
           (ss:bitmap bmp)))))
 
-(define (fill-grid grid from to . what)
-  (match what
-    [(list) (fill-grid grid from to dungeon-wall)]
-    [(list what)
-     (match-let*
-         ([(list x1 x2) (sort (map car (list from to)) <)]
-          [(list y1 y2) (sort (map cadr (list from to)) <)])
-       (mlet* 
-              
+
                
 

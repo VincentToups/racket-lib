@@ -1,5 +1,5 @@
 #lang racket
-(require utilities/proletariate
+(require utilities/proletariat
          functional/point-free)
 
 (define (dip-into dict keys fun)
@@ -27,12 +27,20 @@
 (define-method (dip-property pd key fun) :: propertied
   (dip-into pd '(properties key) fun))
 
+(define/class opaque (object))
+(define/class passable (object))
+(define (impassable? x) (not (passable? x)))
+(define (transparent? x) (not (opaque? x)))
+
 (define/class tile (object) 'things '() 'entities '())
 (define/class floor (tile))
-(define/class wall (tile))
+(define/class wall (opaque tile))
 (define/class fluid (tile) 'depth 7)
+(define/class water (fluid))
+(define/class lava (fluid))
+(define/class poison (fluid))
 (define/class exit (tile) 'to-location #f)
-(define/class stairs (exit))
+(define/class stairs (opaque exit))
 (define/class up-stairs (stairs))
 (define/class down-stairs (stairs))
 (define/class sideways-exit (exit))
@@ -51,9 +59,13 @@
 (define-method (lim- li n) :: limited-integer
   (lim+ li (- n)))
 
+(define (limint v m)
+  (adjust limited-integer 'max m 'value v))
+
 ;;; Traits
 (define/class trait (object))
 (define/class modifiable (object trait) 'modifier limited-integer)
+(define/class use-trackable (object trait) 'use-count 0)
 (define/class melee-weapon-trait (object trait))
 (define/class monster-trait (object trait))
 (define/class shield-trait (object trait))
@@ -64,13 +76,26 @@
 (define/class wall-destroying (object melee-weapon-trait))
 (define/class supernatural (object melee-weapon-trait monster-trait))
 (define/class cybernetic (object melee-weapon-trait monster-trait))
-(define/class self-damaging (object melee-weapon-trait))
+(define/class self-damaging (object melee-weapon-trait) 'reciprocal-damage-percentage 0.1)
 (define/class grasping (object monster-trait))
 
+(define-multimethod (track-use thing) :: (class-name thing))
+(define-method (track-use u) :: use-trackable 
+  (adjust u 'use-count (depending-on (use-count) (+ 1 use-count))))
+
+(define-method (track-use c) :: charge-bearing
+  (adjust (call-next-method) 'charge (depending-on (charge)
+                                  (- charge 1))))
+
+;(prefer-method track-use 'charge-bearing 'use-trackable)
+
+(define-preference track-use :: (< charge-bearing use-trackable))
+          
+
 (define/class item (cursable))
-(define/class melee-weapon (item propertied modifiable) 'attack #f 'name #f)
-(define/class shield (item propertied modifiable) 'defense #f 'name #f)
-(define/class ammunition (item propertied) 'attack #f 'name #f)
+(define/class melee-weapon (item propertied modifiable use-trackable) 'attack #f 'name #f)
+(define/class shield (item propertied modifiable use-trackable) 'defense #f 'name #f)
+(define/class ammunition (item propertied use-trackable) 'attack #f 'name #f)
 
 (define-multimethod (traits o) :: (class-name o))
 (define-method (traits o) :: object
@@ -107,7 +132,7 @@
 (define/class bare-hands (melee-weapon) 'attack 1 'name "bare hands")
 (define/class suit-gauntlet (melee-weapon) 'attack 3 'name "suit gauntlet")
 (define/class heavy-mechanism (melee-weapon) 'attack 5 'name "heavy mechanism")
-(define/class memory-crystal-shared (melee-weapon breakable) 'attack 8 'break-probability 0.1 'name "memory crystal shard")
+(define/class memory-crystal-shard (melee-weapon breakable self-damaging) 'attack 8 'break-probability 0.1 'name "memory crystal shard")
 (define/class topiary-fractal (melee-weapon breakable wall-destroying) 
   'name "topiary fractal"
   'attack 3 
@@ -119,6 +144,13 @@
 
 (define/class bullets (ammunition) 'count 12)
 (define/class pulse-bullets (ammunition) 'count 12)
+(define/class swap-bullets (ammunition) 'count 12)
+(define/class paint-bullets (ammunition) 'count 12)
+(define/class stasis-bullets (ammunition) 'count 12)
+(define/class bind-bullets (ammunition) 'count 12)
+(define/class dilation-bullets (ammunition) 'count 12)
+(define/class inertia-bullets (ammunition) 'count 12)
+(define/class push-bullets (ammunition) 'count 12)
 
 (define/class food (item) 'recovery-amount #f)
 (define/class meal (food) 'recovery-amount 100)
@@ -158,6 +190,12 @@
 (define/class kitable (object) 'shield #f 'melee-weapon #f 'ammunition #f 'items #f)
 (define/class metabolizing (object) 'hunger (adjust limited-integer 'value 100 'max 100))
 (define/class alive (object) 'health limited-integer)
+
+(define-multimethod (health-as-percentage o) :: (class-name o))
+(define-method (health-as-percentage o) :: alive
+  (with-slots (at o 'health) (max value)
+              (/ value max)))
+
 (define-multimethod (dead? o) :: (class-name o))
 (define-method (dead? o) :: alive
   (<= (dict-ref (dict-ref o 'health) 'value) 0))
@@ -169,51 +207,51 @@
            (adjust health 'max amt 'value amt))))
   
 (define/class has-strength (object) 'strength limited-integer)
-(define/class has-toughness (object) 'defense limited-integer)
+(define/class has-defense (object) 'defense limited-integer)
 (define/class leveling (object) 'level 1)
 (define/class entity (object))
 
-(define/class player (entity kitable metabolizing alive has-strength has-toughness leveling)
+(define/class player (entity kitable metabolizing alive has-strength has-defense leveling)
   'strength (adjust limited-integer 'value 3 'max 3)
   'melee-weapon bare-hands
   'shield forearm
   'health (adjust limited-integer 'value 10 'max 10))
 
-(define/class monster (entity alive has-strength has-toughness leveling))
+(define/class monster (entity alive has-strength has-defense leveling))
 (define/class service-droid (monster) 
   'health (adjust limited-integer 'value 4 'max 4)
   'strength 3
-  'toughness 3)
+  'defense 1)
 
 (define/class uncanny-duplicate (cybernetic monster)
   'health (adjust limited-integer 'value 6 'max 6)
   'strength 6
-  'toughness 4)
+  'defense 1)
 
 (define/class menacing-presence (supernatural monster)
   'health (adjust limited-integer 'value 8 'max 8)
   'strength 7
-  'toughness 8)
+  'defense 3)
 
 (define/class naked-singularity (grasping monster)
   'health (adjust limited-integer 'value 15 'max 15)
   'strength 5
-  'toughness 11)
+  'defense 5)
 
 (define/class industrial-robot (monster)
   'health (set-value/max limited-integer 25)
   'strength 10
-  'toughness 10)
+  'defense 6)
 
 (define/class combat-robot (monster)
   'health (set-value/max limited-integer 40)
   'strength 15
-  'toughness 15)
+  'defense 7)
 
 (define/class incisive-philosopher (monster)
   'health (set-value/max limited-integer 20)
   'strength 5
-  'toughness 10)
+  'defense 3)
 
 
 (provide (all-defined-out))

@@ -6,7 +6,7 @@
          utilities/rmatch-let
          functional/point-free)
 
-(define/class grid (object) 'keys '() 'data '() 'min-x +inf.0 'max-x -inf.0 'min-y +inf.0 'max-y -inf.0)
+(define/class grid (object) 'data '() 'min-x +inf.0 'max-x -inf.0 'min-y +inf.0 'max-y -inf.0)
 
 (define-method (at grid pos) :: #(grid list)
   (match grid 
@@ -16,8 +16,10 @@
 (define-method (at grid s) :: #(grid symbol)
   (match s
     ['count (with-slots grid (data) (dict-count data))]
+    ['keys (sort (dict-keys grid) pos<)]
     [_ (call-next-method)]))
-    
+
+
 
 (define (pos< p1 p2)
   (match (list p1 p2)
@@ -52,14 +54,17 @@
           ((equal? p h) (append (reverse acc) rest))
           (else (pos-remove p rest (cons h acc))))])]))
 
+(define (empty-grid? g)
+  (empty? (dict-keys g)))
+
 (define (update-grid-min/max grid)
   (let* ((positions (at grid 'keys)))
     (if (empty? positions)
         (adjust grid 'min-x +inf.0 'max-x -inf.0 'min-y +inf.0 'max-y -inf.0)
         (let*
-         ((first (car positions))
-          (init (list (car first) (cadr first)
-                      (car first) (cadr first))))
+            ((first (car positions))
+             (init (list (car first) (cadr first)
+                         (car first) (cadr first))))
           (match 
               (foldl 
                (lambda (it ac)
@@ -68,10 +73,10 @@
                     (match ac
                       [(list cx cy)
                        (list 
-              (min minx cx)
-              (min miny cy)
-              (max maxx cx)
-              (max maxy cy))])]))
+                        (min minx cx)
+                        (min miny cy)
+                        (max maxx cx)
+                        (max maxy cy))])]))
                init
                (cdr positions))
             [(list minx miny maxx maxy)
@@ -79,13 +84,12 @@
                      'min-x minx
                      'max-x maxx
                      'min-y miny
-               'max-y maxy)])))))
-    
-    (define-multimethod (set-at gr p val) :: (vector-immutable (class-name gr) (class-name p)))
-    (define-method (set-at gr p val) :: #(grid list)
+                     'max-y maxy)])))))
+
+(define-multimethod (set-at gr p val) :: (vector-immutable (class-name gr) (class-name p)))
+(define-method (set-at gr p val) :: #(grid list)
   (adjust gr 'data 
           (depending-on (data) (dict-set data p val))
-          'keys (depending-on (keys) (pos-cons p keys))
           'min-x (depending-on (min-x) 
                                (min min-x (car p)))
           'min-y (depending-on (min-y)
@@ -102,10 +106,7 @@
    (adjust grid 
            'data 
            (depending-on (data)
-                         (dict-remove data pos))
-           'keys (depending-on (keys)
-                               (pos-remove pos keys)))))
-
+                         (dict-remove data pos)))))
 
 
 (define-multimethod (dip-at gr p dip) :: (vector-immutable (class-name gr) (class-name p)))
@@ -119,9 +120,9 @@
     ((= 0 (at g 'count)) '())
     (else
      (with-slots g (min-x max-x min-y max-y)
-                (list
-                 (list min-x min-y)
-                 (list max-x max-y))))))
+                 (list
+                  (list min-x min-y)
+                  (list max-x max-y))))))
 
 (define pos-i car)
 (define pos-j cadr)
@@ -161,7 +162,7 @@
 (define (set-filled-rectangle grid . args)
   (match args
     [(list (pos min-x min-y) (pos max-x max-y) thing)
-     (set-rectangle grid min-x min-y max-x max-y thing)]
+     (set-filled-rectangle grid min-x min-y max-x max-y thing)]
     [(list min-x min-y max-x max-y thing)
      (let loop ((x min-x)
                 (grid grid))
@@ -185,32 +186,21 @@
                  wall))
       grid)]))
 
-(struct doublet (a b) #:transparent)
+(define wall-grid (set-filled-rectangle grid (list 0 0) (list 60 30) wall))
+(define floor-grid (set-filled-rectangle grid (list 0 0) (list 60 30) dungeon-floor))
 
-(define (build-return . items)
-  (match-lambda 
-    [(doublet l g)
-     (doublet (map (partial< doublet l) items) g)]))
+(define (grid-extent g)
+  (match g
+    [(obj 
+      ['min-x min-x]
+      ['max-x max-x]
+      ['min-y min-y]
+      ['max-y max-y])
+     (list (list min-x min-y) 
+           (list max-x max-y))]))
+    
 
-(define (build-bind cmd cmd<p>)
-  (lambda (dblt)
-    (match (cmd dblt)
-      [(doublet lvals g)
-       (let loop ((lvals lvals)
-                  (out-lvals '())
-                  (g g))
-         (match lvals
-           [(list) (doublet out-lvals g)]
-           [(cons (doublet prop lstate) lvals)
-            (match ((cmd<p> prop) (doublet lstate g))
-              [(doublet local-lvals g)
-               (loop 
-                lvals
-                (append out-lvals local-lvals)
-                g)])]))])))
 
-(define build-zero 
-            
 (provide grid grid? dip-at unset-at set-at square-extent pos-i pos-j 
-         set-rectangle set-vertical-line set-horizontal-line 
-         set-filled-rectangle set-room)
+         set-rectangle set-vertical-line set-horizontal-line wall-grid floor-grid
+         set-filled-rectangle set-room empty-grid? grid-extent)
