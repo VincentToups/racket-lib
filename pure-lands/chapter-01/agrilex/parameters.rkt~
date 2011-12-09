@@ -1,0 +1,36 @@
+#lang racket
+
+(define (stamina-cost what)
+  (match what
+    ['till 4]
+    ['plant 2]
+    ['water 1]))
+
+(define weed-threshold 5)
+
+(define (crop-maturation-time c)
+  (+ 4 (match c
+         [(or 'e 'a 'i 'o 'n 'r 't 'l 's 'u) 1]
+         [(or 'd 'g) 2]
+         [(or 'b 'c 'm 'p) 3]
+         [(or 'f 'h 'v 'w 'y) 4]
+         [(or 'k) 5]
+         [(or 'j 'x) 8]
+         [(or 'q 'z) 10])))
+
+(define (crop-time-till-seed c)
+  (+ 4 (crop-maturation-time c)))
+
+(define (crop-yield c)
+  (+ 3
+     (match c
+       ['e 12]
+       [(or 'a 'i) 9]
+       ['o 8]
+       [(or 'n 'r 't) 6]
+       [(or 'l 's 'u 'd) 4]
+       ['g 3]
+       [(or 'b 'c 'm 'p 'f 'h 'v 'w 'y) 2]
+       [(or 'k 'j 'x 'q 'z) 1])))
+
+(define mutation-rate 0.1)

@@ -1,0 +1,36 @@
+#lang racket
+
+(require pure-lands/utilities/dict-state-monad
+         pure-lands/utilities/partial-application
+         pure-lands/chapter-01/agrilex/parameters)
+
+(define stamina (get 'stamina))
+(define field (get 'field))
+(define letters (get 'letters))
+
+(define (set-stamina to)
+  (set 'stamina to))
+(define (set-field to)
+  (set 'field to))
+(define (set-letters to)
+  (set 'letters to))
+
+(define (equal-to-one-of thing whats)
+  (match whats 
+    [(list) #f]
+    [(cons (? (partial equal? thing)) rest)
+     #t]
+    [(cons _ rest)
+     (equal-to-one-of thing rest)]))
+     
+(define (letter? s)
+  (equal-to-one-of s legal-letters))
+  
+(define (adjust-letter letter amount)
+  (set* 'letters letter 
+
+(define (adjust-stamina by)
+  (match by
+    [(? number? n) (transform* 'stamina (partial< + n))]
+    [(? symbol? s) (transform* 'stamina (partial< + (stamina-cost s)))]))
+

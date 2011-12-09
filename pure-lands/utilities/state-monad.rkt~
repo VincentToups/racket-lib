@@ -1,0 +1,48 @@
+#lang racket
+
+(struct state-result (value new-state) #:transparent)
+(struct state-error (error-value last-state) #:transparent)
+
+(define (state-return value)
+  (lambda (state)
+    (state-result value state)))
+
+(define (state-bind state-fun next-state-fun)
+  (lambda (state)
+    (let ((r (state-fun state)))
+      (match r
+        [(state-result value new-state)
+         ((next-state-fun value) new-state)]
+        [(? state-error?)
+         r]
+        [_ ((next-state-fun (void)) r)]))))
+
+(define (state-plus f1 f2)
+  (lambda (state)
+    (match (f1 state)
+      [(state-result _ new-state)
+       (f2 new-state)]
+      [(? state-error? error-value)
+       error-value])))
+
+(define-syntax build 
+  (syntax-rules (<- :=)
+    [(build 
+      (pattern <- expr) rest0 rest ...)
+     (state-bind 
+      expr
+      (lambda (id)
+        (match id
+          [pattern
+           (build rest0 rest ...)])))]
+    [(build 
+      (pattern := expr) rest0 rest ...)
+     (match expr
+       [pattern (build rest0 rest ...)])]
+    [(build expr0 expr1 expr ...)
+     (state-plus
+      expr0
+      (build expr1 expr ...))]
+    [(build expr) expr]))
+
+(provide build state-plus state-bind state-return state-error state-result)

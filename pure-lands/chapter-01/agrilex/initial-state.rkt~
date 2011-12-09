@@ -1,0 +1,16 @@
+#lang racket
+
+(require pure-lands/utilities/nested-dicts)
+
+(define initial-letters
+  (>> 'f 2 'o 4 'd 2))
+
+(define initial-state
+  (>> 'stamina 6
+      'total-turns 0
+      'points 0
+      'letters initial-letters
+      'items '()
+      'field '()
+      'random-state
+      #(1 2 3 4 5 6)))
