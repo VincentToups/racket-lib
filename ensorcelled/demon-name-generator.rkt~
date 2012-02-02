@@ -1,0 +1,398 @@
+#lang racket 
+
+(require functional/better-monads)
+
+(define demon-names 
+  (list "Abraxas"
+		"Abbadon"
+		"Agrith-Naar"
+		"Aku"
+		"Alastair"
+		"Alastor"
+		"Algaliarept"
+		"Alichino"
+		"Andariel"
+		"Angel"
+		"Anyanka"
+		"Anzu"
+		"Archimonde"
+		"Artery"
+		"Asmodeus"
+		"Asura"
+		"Azal"
+		"Azazeal"
+		"Azazel"
+		"Azazel"
+		"Azmodan"
+		"Azura"
+		"Amaimon"
+		"Baal"
+		"Babau"
+		"Bacarra"
+		"Bal'lak"
+		"Balor"
+		"Balrog"
+		"Balthazar"
+		"Baphomet"
+		"Barakiel"
+		"Barbariccia"
+		"Barbas"
+		"Bartimaeus"
+		"Bat'Zul"
+		"Beastie"
+		"Be'lakor"
+		"Bebilith"
+		"Beelzebub"
+		"Beleth"
+		"Belfagor"
+		"Belial"
+		"Belphegor"
+		"Belthazor"
+		"Berry"
+		"Betelguese"
+		"Blackheart"
+		"Cacodemon"
+		"Cadaver"
+		"Cagnazzo"
+		"Calcabrina"
+		"Calcifer"
+		"Castor"
+		"Cordelia"
+		"Chernabog"
+		"Cherry"
+		"Ciriatto"
+		"Claude"
+		"Crawly"
+		"Crowley"
+		"Cyberdemon"
+		"Cryto"
+		"D'Hoffryn"
+		"Dabura"
+		"Draghinazzo"
+		"Dante"
+		"Darkseid"
+		"Decarbia"
+		"Delrith"
+		"Demonita"
+		"Devi"
+		"Diablo"
+		"Doviculus"
+		"Doyle"
+		"Dretch"
+		"Dumain"
+		"Duriel"
+		"Errtu"
+		"Etna"
+		"Etrigan"
+		"Faquarl"
+		"Farfarello"
+		"Femur"
+		"Firebrand"
+		"Randall"
+		"Furfur"
+		"Gaap"
+		"Gary"
+		"Glabrezu"
+		"Gregor"
+		"Gothmog"
+		"The"
+		"Halfrek"
+		"Har'lakk"
+		"Hastur"
+		"Hellboy"
+		"Hell"
+		"Hezrou"
+		"Hiei"
+		"Him"
+		"Hnikarr"
+		"Hot"
+		"Hex"
+		"Infernal"
+		"Inferno"
+		"Jabor"
+		"Jadis"
+		"Janemba"
+		"Japhrimel"
+		"Jennifer"
+		"Juiblex"
+		"K'ril"
+		"Kal'Ger"
+		"DCI"
+		"Khorne"
+		"Kil'jaeden"
+		"Kneesocks"
+		"Koakuma"
+		"Korrok"
+		"Kronos"
+		"Freddy"
+		"Laharl"
+		"Lamia"
+		"Leviathan"
+		"Libicocco"
+		"Ligur"
+		"Lilith"
+		"Little"
+		"Longhorn"
+		"Lorne"
+		"Loki"
+		"Lucifer"
+		"Mal'Ganis"
+		"Malacoda"
+		"Maledict"
+		"Malfegor"
+		"Malice"
+		"Mammon"
+		"Mancubus"
+		"Mannoroth"
+		"Marilith"
+		"Masselin"
+		"Meg"
+		"Mehrunes"
+		"Melkor"
+		"Mephisto"
+		"Mephisto"
+		"Mephistopheles"
+		"Mephisto"
+		"N'zall"
+		"Nadia"
+		"Nalfeshnee"
+		"Nanatoo"
+		"Nero"
+		"Neuro"
+		"Newt"
+		"Nouda"
+		"Nurgle"
+		"Oyashiro"
+		"Rin"
+		"Pazuzu"
+		"Pennywise"
+		"Psaro"
+		"Quasit"
+		"Queezle"
+		"Qwan"
+		"Qweffor"
+		"Rakdos"
+		"Ramuthra"
+		"Red"
+		"Retriever"
+		"Randall"
+		"Ronove"
+		"Rosier"
+		"Rubicante"
+		"Ruby"
+		"Satan"
+		"Satan"
+		"Sauron"
+		"Scanty"
+		"Scarlet"
+		"Scarmiglione"
+		"Scumspawn"
+		"Sebastian"
+		"Shax"
+		"Silitha"
+		"Slaanesh"
+		"Sparda"
+		"Spawn"
+		"Spike"
+		"Spine"
+		"Straga"
+		"Tempus"
+		"Thammaron"
+		"Tiamat"
+		"Toby"
+		"To'Kash"
+		"Trigon"
+		"Turok-Han"
+		"Tzeentch"
+		"Ungoliant"
+		"Vein"
+		"Vergil"
+		"Violator"
+		"Vrock"
+		"Vulgrim"
+		"Vyers"
+		"Ware"
+		"Wormwood"
+		"Yaksha"
+		"Yk'Lagor"
+		"Zankou"
+		"Zepar"
+		"Overlord"
+		"Zuul"))
+
+(define (max-length-over g)
+  (foldl (lambda (n s) 
+		   (max n (string-length s)))
+		 0
+		 g))
+
+(define (empty-string? s)
+  (= 0 (string-length s)))
+
+(define (those-non-empty strings)
+  (let loop ((acc '())
+			 (strings strings))
+	(match strings
+	  ((list) (reverse acc))
+	  ((cons (? empty-string?) rest)
+	   (loop acc rest))
+	  ((cons s rest)
+	   (loop (cons s acc)
+			 rest)))))
+
+(define (string-head s)
+  (substring s 0 1))
+
+(define (string-tail s)
+  (substring s 1 (string-length s)))
+
+(define (last-character s)
+  (if (empty-string? s) ""
+	  (substring s (- (string-length s) 1) (string-length s))))
+
+(define (dict-update d key fun . args)
+  (match args
+	((list)
+	 (let ((val (dict-ref d key)))
+	   (dict-set d key (fun val))))
+	((list or-value)
+	 (let ((val (dict-ref d key (lambda () or-value))))
+	   (dict-set d key (fun val))))))
+
+
+
+(define (at-plus d k)
+  (dict-update d k (lambda (x) (+ x 1)) 0))
+
+(define (char->symbol c)
+  (string->symbol (list->string (list c))))
+
+(define (char->symbol* o)
+  (cond ((symbol? o) o)
+		((char? o) (char->symbol o))))
+
+(struct triple (index from to) #:transparent)
+
+(define (string->triples s)
+  (let loop
+	  ((i 0)
+	   (l (append '(start) 
+				  (string->list s)
+				  '(end)))
+	   (triples '()))
+	(match l
+	  ((list 'end) (reverse triples))
+	  ((cons from 
+			 (and rest
+				  (cons to _)))
+	   (loop 
+		(+ i 1)
+		rest
+		(cons (triple i
+					(char->symbol* from) 
+					(char->symbol* to))
+			  triples))))))
+
+
+(define (populate-transition-table names)
+  (let loop 
+	  ((names names)
+	   (table (make-immutable-hash '())))
+	(match names
+	  ((list) table)
+	  ((cons name names)
+	   (loop names
+			 (foldl 
+			  (lambda (triple table)
+				(at-plus table triple))
+			  table
+			  (string->triples name)))))))
+
+;; (string->triples "test")
+
+
+;; (populate-transition-table demon-names)
+
+(define (=/c n)
+  (lambda (m)
+	(= n m)))
+
+(define (eq?/c a)
+  (lambda (b)
+	(eq? a b)))
+
+(define (restrict-table table index from)
+  (foldl
+   (lambda (trip new-table) 
+	 (match trip
+	   ((triple
+		 (? (=/c index))
+		 (? (eq?/c from))
+		 _)
+		(dict-set new-table trip (dict-ref table trip)))
+	   (_ new-table)))
+   (make-immutable-hash '())
+   (dict-keys table)))
+
+(define (next-character table prev-character index . args)
+  (match args
+	((list) (next-character table prev-character
+							index
+							(current-pseudo-random-generator)))
+	((list generator)
+	 (let* ((sub-table 
+			 (restrict-table table index prev-character))
+			(total-elements (foldl + 0 (dict-values sub-table)))
+			(draw (random total-elements generator)))
+	   (let loop 
+		   ((draw draw)
+			(key/val (dict->list sub-table)))
+		 (match key/val
+		   ((cons (cons 
+				   (triple _ from to)
+				   count) rest)
+			(if (or (empty? rest)
+					(<= draw 0))
+				to
+				(loop (- draw count)
+					  rest)))))))))
+
+(define (symbol-list->string sl)
+  (foldl (lambda (symbol string)
+		   (string-append
+			string (symbol->string symbol)))
+		 ""
+		 sl))
+
+(define (generate-demon-name table . args)
+  (match args
+	((list) (generate-demon-name table (current-pseudo-random-generator)))
+	((list gen)
+	 (let loop ((ix 0)
+				(name-list '(start)))
+	   (let ((next (next-character table (car name-list) ix gen)))
+		 (if (eq? next 'end)
+			 (symbol-list->string (cdr (reverse name-list)))
+			 (loop 
+			  (+ ix 1)
+			  (cons next name-list))))))))
+
+(define standard-table (populate-transition-table demon-names))
+
+(define (generate-demon-names table n . args)
+  (match args
+	[(list)
+	 (generate-demon-names table n (current-pseudo-random-generator) '())]
+	[(list gen)
+	 (generate-demon-names table n gen '())]
+	[(list gen acc)
+	 (match n
+	   [0 acc]
+	   [n (generate-demon-names table (- n 1) gen 
+								(cons (generate-demon-name table gen) acc))])]))
+
+(provide generate-demon-names
+		 generate-demon-name
+		 standard-table
+		 populate-transition-table)
+

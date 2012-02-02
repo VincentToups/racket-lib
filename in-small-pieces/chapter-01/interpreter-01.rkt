@@ -320,7 +320,7 @@
 
 ;;; Wheeeee!
 
-;;; Look out for the next interpreter!  Code is available on [github]().
-
+;;; Look out for the next interpreter!  Code is available on [github][].
+;;; [github]:https://github.com/VincentToups/racket-lib/blob/master/in-small-pieces/chapter-01/interpreter-01.rkt
 
 

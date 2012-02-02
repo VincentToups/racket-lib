@@ -17,8 +17,8 @@
   (build
    (maybe-plot <- (plot-name-available? name))
    (if maybe-plot
-	   (==>  maybe-plot)
-	   (error (format "Can't get the plot ~a because it doesn't exist." name)))))
+	   (error (format "Can't get the plot ~a because it doesn't exist." name))
+	   (get* 'field name))))
 
 (define (create-plot name)
   (build 
@@ -40,8 +40,9 @@
 (define (assert-plot-exists name)
   (build
    (avail <- (plot-name-available? name))
-   (if avail (==> #t) 
-	   (==> (error (format "Plot name ~a doesn't exist, but an assertion required it." name))))))
+   (if avail  
+	   (==> (error (format "Plot name ~a doesn't exist, but an assertion required it." name)))
+	   (==> #t))))
 
 (define (watered? name)
   (build
@@ -81,7 +82,7 @@
  handle-weather
  (w <- (get 'weather))
  (for-each-plot 
-  (build/lambda 
+  (lambda 
    (name)
    (if (equal? w 'raining)
 	   (wet name)

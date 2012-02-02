@@ -2,23 +2,25 @@
 
 (define (pair a b) (cons a b))
 
+(define (key? a) (or (symbol? a) (string? a)))
+
 (define (transform state key-or-keys function)
   (match key-or-keys
-    [(or (? symbol? key) 
-         (list key))
+    [(or (? key? key) 
+         (list (? key? key)))
      (let ((value (dict-ref state key #f)))
        (dict-set state key (function value)))]
-    [(cons key others)
+    [(cons (? key? key) others)
      (let ((value (dict-ref state key '())))
        (dict-set state key
                  (transform value others function)))]))
 
 (define (with state key-or-keys fun)
   (match key-or-keys
-    [(or (? symbol? key)
-         (list key))
+    [(or (? key? key)
+         (list (? key? key)))
      (fun (dict-ref state key #f))]
-    [(cons key rest)
+    [(cons (? key? key) rest)
      (with (dict-ref state key '()) rest fun)]))
 
 (define (get state key-or-keys)
