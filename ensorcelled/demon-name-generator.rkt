@@ -1108,7 +1108,7 @@
 				  (cons to _)))
 	   (loop 
 		(+ i 1)
-		rests
+		rest
 		(cons (triple i
 					(char->symbol* from) 
 					(char->symbol* to))
